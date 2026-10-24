@@ -1,0 +1,68 @@
+# =============================================================================
+# GITIGNORE FOR RAG CHATBOT
+# =============================================================================
+
+# --- Môi trường ảo (Virtual Environments) ---
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Bảo mật & Biến môi trường (TUYỆT ĐỐI KHÔNG PUSH LÊN GIT) ---
+.env
+.env.*
+*.env
+!.env.example
+
+# --- Dữ liệu Vector & Bộ nhớ Chatbot (Tạo tự động khi chạy) ---
+faiss_index/
+chat_history.json
+*.jsonl
+*.log
+
+# --- Python Cache & Build Artifacts ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Cache của HuggingFace, PyTorch, Cuda ---
+.cache/
+hf_cache/
+*.pth
+*.pt
+*.bin
+*.onnx
+
+# --- IDE & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.directory
+.DS_Store
+Thumbs.db
+
+# --- Tài liệu dung lượng lớn (Tùy chọn: bỏ comment nếu không muốn push file PDF giáo trình) ---
+# docs/*.pdf
