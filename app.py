@@ -1,7 +1,7 @@
 # =============================================================================
-# STREAMLIT WEB UI - Giao diện hỏi đáp trực quan
-# Chạy bằng: streamlit run app.py
+# STREAMLIT WEB UI - Giao diện hỏi đáp Lịch Sử Đảng CSVN
 # Tích hợp: Streaming, Hybrid Search, Incremental Indexing, Multi-Model Fallback
+# Phong cách: Nền trắng tối giản kết hợp các nút bấm màu đen (Monochrome Minimalist)
 # =============================================================================
 
 import os
@@ -16,222 +16,523 @@ from rag_core import (
     CHAT_HISTORY_FILE,
 )
 
-# ─────────────────────────── Cấu hình trang ───────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. CẤU HÌNH TRANG STREAMLIT
+# ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Chatbot Lịch Sử Đảng CSVN",
+    page_title="Hỏi Đáp Lịch Sử Đảng CSVN",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ─────────────────────────── CSS tùy chỉnh ────────────────────────────
-st.markdown("""
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. BỘ PHONG CÁCH CSS NỀN TRẮNG & NÚT BẤM ĐEN
+# ─────────────────────────────────────────────────────────────────────────────
+CUSTOM_CSS = """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
+    /* Global Typography & Light Background */
+    html, body, [class*="css"], .stApp {
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        background-color: #ffffff !important;
+        color: #0f172a !important;
     }
 
-    /* Header */
-    .app-header {
-        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-        border-radius: 16px;
-        padding: 24px 32px;
-        margin-bottom: 24px;
-        border: 1px solid rgba(255,255,255,0.08);
+    /* Ẩn header & footer mặc định của Streamlit - Loại bỏ hoàn toàn thanh che khuất trên cùng */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header[data-testid="stHeader"] {
+        display: none !important;
     }
-    .app-header h1 {
-        color: #fff;
-        margin: 0;
-        font-size: 1.75rem;
+    div[data-testid="stDecoration"] {
+        display: none !important;
+    }
+
+    /* ──────────────── SIDEBAR ──────────────── */
+    section[data-testid="stSidebar"] {
+        background-color: #f8fafc !important;
+        border-right: 1px solid #e2e8f0 !important;
+        padding-top: 1rem;
+    }
+
+    section[data-testid="stSidebar"] .stMarkdown h1,
+    section[data-testid="stSidebar"] .stMarkdown h2,
+    section[data-testid="stSidebar"] .stMarkdown h3 {
+        color: #0f172a !important;
         font-weight: 700;
-        letter-spacing: -0.02em;
-    }
-    .app-header p {
-        color: rgba(255,255,255,0.65);
-        margin: 6px 0 0;
-        font-size: 0.92rem;
+        font-size: 1.05rem;
+        margin-bottom: 0.6rem;
+        letter-spacing: -0.01em;
     }
 
-    /* Badges */
-    .badge-row {
+    /* Sidebar Brand Card */
+    .sidebar-brand {
         display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-top: 12px;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 14px 16px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
-    .badge {
-        background: rgba(255,255,255,0.12);
-        border: 1px solid rgba(255,255,255,0.2);
-        color: #e2e8f0;
-        padding: 3px 10px;
-        border-radius: 20px;
-        font-size: 0.78rem;
+    .sidebar-brand-icon {
+        font-size: 1.8rem;
+        line-height: 1;
+    }
+    .sidebar-brand-title {
+        font-size: 1.02rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0;
+        line-height: 1.2;
+    }
+    .sidebar-brand-subtitle {
+        font-size: 0.74rem;
+        color: #64748b;
+        margin: 2px 0 0;
         font-weight: 500;
     }
 
-    /* Model label */
-    .model-label {
-        font-size: 0.72rem;
-        color: #94a3b8;
-        margin-bottom: 4px;
-        letter-spacing: 0.04em;
+
+
+    /* Style selectbox */
+    section[data-testid="stSidebar"] [data-baseweb="select"] {
+        border-radius: 10px !important;
+    }
+    section[data-testid="stSidebar"] [data-baseweb="select"] > div {
+        background-color: #ffffff !important;
+        border: 1.5px solid #0f172a !important;
+        border-radius: 10px !important;
+        color: #0f172a !important;
+        font-weight: 600 !important;
+        font-size: 0.86rem !important;
     }
 
-    /* Chat input */
-    .stChatInput > div {
+    /* ──────────────── ĐỒNG BỘ TOÀN BỘ NÚT BẤM LÀ MÀU ĐEN ──────────────── */
+    .stButton button,
+    .stButton > button,
+    button[kind="secondary"],
+    button[kind="primary"],
+    [data-testid="baseButton-secondary"],
+    [data-testid="baseButton-primary"] {
+        background-color: #0f172a !important;
+        background: #0f172a !important;
+        color: #ffffff !important;
+        border: 1px solid #0f172a !important;
         border-radius: 12px !important;
-        border: 1.5px solid #334155 !important;
+        font-weight: 600 !important;
+        box-shadow: 0 3px 6px rgba(15, 23, 42, 0.12) !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    .stButton button p,
+    .stButton button div,
+    .stButton button span,
+    button[kind="secondary"] p,
+    button[kind="primary"] p {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+
+    .stButton button:hover,
+    button[kind="secondary"]:hover,
+    button[kind="primary"]:hover {
+        background-color: #1e293b !important;
         background: #1e293b !important;
+        border-color: #1e293b !important;
+        color: #ffffff !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 16px rgba(15, 23, 42, 0.2) !important;
     }
 
-    /* Source pills */
-    .source-pill {
-        display: inline-block;
-        background: rgba(99,102,241,0.15);
-        border: 1px solid rgba(99,102,241,0.3);
-        color: #a5b4fc;
-        padding: 2px 10px;
-        border-radius: 12px;
-        font-size: 0.76rem;
-        margin: 2px;
+    .stButton button:active,
+    button[kind="secondary"]:active,
+    button[kind="primary"]:active {
+        background-color: #000000 !important;
+        transform: translateY(0px) !important;
     }
 
-    /* Sidebar tweaks */
-    section[data-testid="stSidebar"] {
-        background: #0f172a;
+    /* ──────────────── MAIN CONTAINER & HEADER ──────────────── */
+    .block-container {
+        padding-top: 2rem !important;
+        padding-bottom: 6rem !important;
+        max-width: 950px !important;
+        background-color: #ffffff !important;
+    }
+
+    /* Top App Banner - Thiết kế thanh lịch, icon và chữ thẳng hàng đều nhau */
+    .main-banner {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 24px 28px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+        box-sizing: border-box;
+    }
+    .banner-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 1.65rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0 0 8px 0;
+        letter-spacing: -0.02em;
+        line-height: 1.25;
+    }
+    .banner-icon {
+        font-size: 1.9rem;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .banner-subtitle {
+        color: #475569;
+        font-size: 0.92rem;
+        margin: 0;
+        line-height: 1.6;
+        font-weight: 400;
+    }
+
+    /* ──────────────── WELCOME PROMPTS ──────────────── */
+    .welcome-intro {
+        text-align: center;
+        margin: 28px 0 20px;
+    }
+    .welcome-intro h3 {
+        font-size: 1.3rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin-bottom: 6px;
+        letter-spacing: -0.01em;
+    }
+    .welcome-intro p {
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+
+    /* ──────────────── CHAT MESSAGES STYLING ──────────────── */
+    .stChatMessage {
+        background-color: transparent !important;
+        border: none !important;
+        padding: 10px 0 !important;
+    }
+
+    /* User Message Bubble */
+    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
+        background: #f1f5f9 !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 16px !important;
+        padding: 16px 20px !important;
+        margin-bottom: 14px !important;
+        color: #0f172a !important;
+    }
+
+    /* Assistant Message Bubble */
+    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {
+        background: #ffffff !important;
+        border: 1.5px solid #e2e8f0 !important;
+        border-radius: 16px !important;
+        padding: 18px 22px !important;
+        margin-bottom: 14px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+        color: #0f172a !important;
+    }
+
+    /* Model Tag */
+    .chat-model-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        color: #0f172a;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 9999px;
+        margin-bottom: 10px;
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ──────────────── CHAT INPUT BAR ──────────────── */
+    [data-testid="stChatInput"] {
+        background-color: transparent !important;
+    }
+    [data-testid="stChatInput"] > div {
+        background-color: #ffffff !important;
+        border: 1.5px solid #0f172a !important;
+        border-radius: 14px !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08) !important;
+        transition: box-shadow 0.2s ease;
+    }
+    [data-testid="stChatInput"] > div:focus-within {
+        border-color: #000000 !important;
+        box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.15) !important;
+    }
+    [data-testid="stChatInput"] textarea {
+        color: #0f172a !important;
+        font-size: 0.95rem !important;
+    }
+    [data-testid="stChatInput"] textarea::placeholder {
+        color: #94a3b8 !important;
+    }
+    /* Send button */
+    [data-testid="stChatInput"] button {
+        background: #0f172a !important;
+        color: #ffffff !important;
+        border-radius: 8px !important;
+    }
+    [data-testid="stChatInput"] button:hover {
+        background: #334155 !important;
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #ffffff;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
     }
 </style>
-""", unsafe_allow_html=True)
+"""
+
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
-# ─────────────────────── Khởi tạo RAG (cache theo session) ────────────────
-@st.cache_resource(show_spinner="⚙️ Đang khởi động hệ thống RAG... (chỉ chạy một lần)")
-def init_rag():
-    """Singleton: khởi tạo embedding model, vectorstore, hybrid retriever một lần."""
-    emb        = get_embedding_model()
-    vs         = build_or_update_vectorstore(emb)
-    hybrid_ret = build_hybrid_retriever(vs, k=5)
-    return hybrid_ret
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. KHỞI TẠO HỆ THỐNG RAG (SINGLETON CACHED)
+# ─────────────────────────────────────────────────────────────────────────────
+@st.cache_resource(show_spinner="🧠 Đang khởi tạo mô hình BAAI/bge-m3 và FAISS Index...")
+def init_rag_system():
+    """Tải embedding model BGE-M3 (GPU), FAISS Vectorstore và Hybrid Retriever."""
+    emb = get_embedding_model()
+    vs  = build_or_update_vectorstore(emb)
+    ret = build_hybrid_retriever(vs, k=5)
+    return ret
 
 
-retriever = init_rag()
+retriever = init_rag_system()
 
 
-# ─────────────────────────── Session State ────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. QUẢN LÝ SESSION STATE
+# ─────────────────────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
-    st.session_state.messages = []   # list of {"role": "user"|"assistant", "content": str, "model": str|None}
+    st.session_state.messages = []
 
 if "session_id" not in st.session_state:
     st.session_state.session_id = "web_user"
 
+if "suggested_prompt" not in st.session_state:
+    st.session_state.suggested_prompt = None
 
-# ─────────────────────────── SIDEBAR ─────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. SIDEBAR - CHỌN MÔ HÌNH VỚI TÊN & ƯU ĐIỂM
+# ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### ⚙️ Cấu hình")
+    # Brand Header
+    sidebar_brand_html = (
+        '<div class="sidebar-brand">'
+        '<div class="sidebar-brand-icon">🎓</div>'
+        '<div>'
+        '<div class="sidebar-brand-title">Lịch Sử Đảng CSVN</div>'
+        '<div class="sidebar-brand-subtitle">Trợ lý học thuật RAG v2.0</div>'
+        '</div>'
+        '</div>'
+    )
+    st.markdown(sidebar_brand_html, unsafe_allow_html=True)
 
-    st.markdown("**🤖 Thứ tự ưu tiên mô hình:**")
-    for i, m in enumerate(FREE_MODELS, 1):
-        short = m.split("/")[-1].replace(":free", "")
-        label = "🟢 Ưu tiên" if i == 1 else f"🔵 Fallback {i-1}"
-        st.markdown(f"`{label}` **{short}**")
+    st.markdown("### 🤖 Mô hình Phản Hồi")
 
-    st.divider()
+    MODEL_OPTIONS = {
+        "auto": "⚡ Tự động (Tối ưu)",
+        "nvidia/nemotron-3.5-super-vl:free": "Nemotron 3.5 Super VL (Ngữ cảnh 1M)",
+        "nvidia/nemotron-3.5-lightning:free": "Nemotron 3.5 Lightning (Tốc độ cao)",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": "Nemotron 30B Reasoning (Suy luận)",
+        "xingchen-agi/xing4.0-29b-a4b:free": "XingChen 29B (Tổng hợp)",
+        "recursive/flint-v1.0:free": "Recursive Flint v1.0 (Ổn định)",
+    }
 
-    st.markdown("**📊 Cấu hình Hybrid Search:**")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("BM25", "40%", help="Tìm kiếm từ khóa chính xác")
-    with col2:
-        st.metric("FAISS", "60%", help="Tìm kiếm ngữ nghĩa vector")
-
-    st.divider()
-
-    if st.button("🗑️ Xóa lịch sử hội thoại", use_container_width=True, type="secondary"):
-        st.session_state.messages = []
-        if os.path.exists(CHAT_HISTORY_FILE):
-            os.remove(CHAT_HISTORY_FILE)
-        st.success("Đã xóa lịch sử! Bắt đầu cuộc hội thoại mới.")
-
-    st.divider()
-    st.caption(
-        "**RAG Chatbot v2.0**\n\n"
-        "Semantic Chunking · Hybrid Search · Streaming · Multi-Model Fallback"
+    selected_model_key = st.selectbox(
+        "Chọn mô hình phản hồi:",
+        options=list(MODEL_OPTIONS.keys()),
+        format_func=lambda k: MODEL_OPTIONS[k],
+        index=0,
+        label_visibility="collapsed",
     )
 
+    st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
 
-# ─────────────────────────── HEADER ──────────────────────────────────
-st.markdown("""
-<div class="app-header">
-    <h1>🎓 Chatbot Hỏi Đáp Lịch Sử Đảng CSVN</h1>
-    <p>Hỏi đáp thông minh từ giáo trình, trích dẫn số trang, trí nhớ đa lượt</p>
-    <div class="badge-row">
-        <span class="badge">✂️ SemanticChunker</span>
-        <span class="badge">🔍 Hybrid Search BM25+FAISS</span>
-        <span class="badge">⚡ Streaming</span>
-        <span class="badge">🔄 Multi-Model Fallback</span>
-        <span class="badge">📄 Incremental Indexing</span>
+    # Nút xóa lịch sử hội thoại (nền đen, chữ trắng)
+    if st.button("🗑️ Làm mới cuộc hội thoại", use_container_width=True):
+        st.session_state.messages = []
+        if os.path.exists(CHAT_HISTORY_FILE):
+            try:
+                os.remove(CHAT_HISTORY_FILE)
+            except Exception:
+                pass
+        st.session_state.suggested_prompt = None
+        st.rerun()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. HEADER CHÍNH CỦA TRANG
+# ─────────────────────────────────────────────────────────────────────────────
+banner_html = (
+    '<div class="main-banner">'
+    '<div class="banner-title">'
+    '<span class="banner-icon">🎓</span>'
+    '<span>Hỏi Đáp Giáo Trình Lịch Sử Đảng</span>'
+    '</div>'
+    '<p class="banner-subtitle">'
+    'Hệ thống tra cứu học thuật thông minh, trích dẫn chính xác theo từng số trang từ giáo trình, '
+    'hỗ trợ ghi nhớ đa lượt hội thoại và phân tích chuyên sâu.'
+    '</p>'
+    '</div>'
+)
+st.markdown(banner_html, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. GIAO DIỆN KHI CHƯA CÓ TIN NHẮN (GỢI Ý CÂU HỎI NHANH - NÚT ĐEN)
+# ─────────────────────────────────────────────────────────────────────────────
+if len(st.session_state.messages) == 0:
+    st.markdown("""
+    <div class="welcome-intro">
+        <h3>💡 Bạn muốn tìm hiểu nội dung nào hôm nay?</h3>
+        <p>Bấm vào một trong các câu hỏi gợi ý bên dưới hoặc tự nhập câu hỏi vào ô chat:</p>
     </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button(
+            "📜 Cương lĩnh chính trị đầu tiên (1930)",
+            key="suggest_1",
+            use_container_width=True
+        ):
+            st.session_state.suggested_prompt = "Nội dung cốt lõi và ý nghĩa lịch sử của Cương lĩnh chính trị đầu tiên của Đảng (năm 1930) là gì?"
+            st.rerun()
+
+        if st.button(
+            "⚡ Thắng lợi Cách mạng Tháng Tám (1945)",
+            key="suggest_2",
+            use_container_width=True
+        ):
+            st.session_state.suggested_prompt = "Phân tích nguyên nhân thắng lợi và bài học kinh nghiệm của Cách mạng Tháng Tám năm 1945?"
+            st.rerun()
+
+    with col2:
+        if st.button(
+            "🏛️ Đường lối Đổi mới - Đại hội VI (1986)",
+            key="suggest_3",
+            use_container_width=True
+        ):
+            st.session_state.suggested_prompt = "Đại hội đại biểu toàn quốc lần thứ VI (1986) của Đảng đã đề ra đường lối đổi mới như thế nào?"
+            st.rerun()
+
+        if st.button(
+            "🎯 Chiến thắng Điện Biên Phủ (1954)",
+            key="suggest_4",
+            use_container_width=True
+        ):
+            st.session_state.suggested_prompt = "Ý nghĩa lịch sử của chiến thắng Điện Biên Phủ năm 1954 đối với cuộc kháng chiến chống thực dân Pháp?"
+            st.rerun()
 
 
-# ─────────────────────── Hiển thị lịch sử chat ───────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. HIỂN THỊ LỊCH SỬ TIN NHẮN
+# ─────────────────────────────────────────────────────────────────────────────
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"], avatar="👤" if msg["role"] == "user" else "🤖"):
+    avatar_icon = "👤" if msg["role"] == "user" else "🎓"
+    with st.chat_message(msg["role"], avatar=avatar_icon):
         if msg["role"] == "assistant" and msg.get("model"):
+            clean_model = msg["model"].split("/")[-1].replace(":free", "")
             st.markdown(
-                f'<div class="model-label">via {msg["model"]}</div>',
+                f'<div class="chat-model-tag">⚡ Phản hồi bởi {clean_model}</div>',
                 unsafe_allow_html=True
             )
         st.markdown(msg["content"])
 
 
-# ─────────────────────────── Chat Input ──────────────────────────────
-prompt = st.chat_input("Nhập câu hỏi về Lịch Sử Đảng Cộng Sản Việt Nam...")
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. XỬ LÝ NHẬP LIỆU & STREAMING PHẢN HỒI
+# ─────────────────────────────────────────────────────────────────────────────
+user_input = st.chat_input("Nhập câu hỏi về sự kiện, nhân vật, cương lĩnh, mốc thời gian...")
 
-if prompt:
-    # Hiển thị tin nhắn người dùng
-    st.session_state.messages.append({"role": "user", "content": prompt, "model": None})
+active_prompt = None
+if user_input:
+    active_prompt = user_input
+elif st.session_state.suggested_prompt:
+    active_prompt = st.session_state.suggested_prompt
+    st.session_state.suggested_prompt = None
+
+if active_prompt:
+    # 1. Thêm tin nhắn của User
+    st.session_state.messages.append({"role": "user", "content": active_prompt, "model": None})
     with st.chat_message("user", avatar="👤"):
-        st.markdown(prompt)
+        st.markdown(active_prompt)
 
-    # Tạo phản hồi với streaming
-    with st.chat_message("assistant", avatar="🤖"):
-        model_placeholder = st.empty()
-        response_box      = st.empty()
+    # 2. Xác định danh sách model ưu tiên theo lựa chọn người dùng
+    preferred_models = None
+    if selected_model_key != "auto":
+        other_models = [m for m in FREE_MODELS if m != selected_model_key]
+        preferred_models = [selected_model_key] + other_models
+
+    # 3. Xử lý phản hồi từ Assistant với streaming
+    with st.chat_message("assistant", avatar="🎓"):
+        model_tag_placeholder = st.empty()
+        response_placeholder  = st.empty()
 
         full_response = ""
-        used_model    = None
+        resolved_model = None
 
         try:
             for token, model_name in stream_with_fallback(
-                prompt,
+                active_prompt,
                 retriever,
                 session_id=st.session_state.session_id,
+                preferred_models=preferred_models,
             ):
-                if used_model is None:
-                    used_model = model_name
-                    model_placeholder.markdown(
-                        f'<div class="model-label">via {model_name}</div>',
+                if resolved_model is None:
+                    resolved_model = model_name
+                    clean_name = model_name.split("/")[-1].replace(":free", "")
+                    model_tag_placeholder.markdown(
+                        f'<div class="chat-model-tag">⚡ Phản hồi bởi {clean_name} · Streaming</div>',
                         unsafe_allow_html=True
                     )
 
                 full_response += token
-                # Hiện chữ đang gõ (cursor ▌)
-                response_box.markdown(full_response + " ▌")
+                # Hiển thị con trỏ typing ▌
+                response_placeholder.markdown(full_response + " ▌")
 
-            # Xóa cursor khi hoàn tất
-            response_box.markdown(full_response)
+            # Hoàn tất: bỏ con trỏ typing
+            response_placeholder.markdown(full_response)
 
         except Exception as e:
-            full_response = f"❌ Lỗi khi kết nối mô hình: {e}"
-            response_box.error(full_response)
+            full_response = f"❌ Không thể nhận phản hồi từ các mô hình: {e}"
+            response_placeholder.error(full_response)
 
         # Lưu vào session state
         st.session_state.messages.append({
             "role": "assistant",
             "content": full_response,
-            "model": used_model,
+            "model": resolved_model,
         })
