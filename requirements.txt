@@ -1,5 +1,5 @@
 # =============================================================================
-# REQUIREMENTS FOR RAG CHATBOT - LỊCH SỬ ĐẢNG CỘNG SẢN VIỆT NAM
+# REQUIREMENTS FOR RAG CHATBOT v2.0 - LỊCH SỬ ĐẢNG CỘNG SẢN VIỆT NAM
 # =============================================================================
 
 # --- LangChain Core & Ecosystem ---
@@ -27,6 +27,12 @@ accelerate>=0.30.0
 faiss-gpu>=1.8.0
 # Hoặc nếu chạy trên máy không có GPU, đổi thành:
 # faiss-cpu>=1.8.0
+
+# --- Hybrid Search (Ưu tiên 2) ---
+rank_bm25>=0.2.2
+
+# --- Web UI (Ưu tiên 1) ---
+streamlit>=1.30.0
 
 # --- Environment & Configuration ---
 python-dotenv>=1.0.0
