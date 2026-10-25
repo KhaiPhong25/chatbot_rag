@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 # LangChain - Document Loading & Splitting
 from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_experimental.text_splitter import SemanticChunker
 
 # LangChain - Embedding & VectorStore
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -66,43 +66,7 @@ def get_llm(model_name: str) -> ChatOpenAI:
 
 
 # =============================================================================
-# 2. LOAD DOCUMENTS & CHUNKING
-# =============================================================================
-print("\n📂 Đang tải tài liệu PDF...")
-loader = DirectoryLoader(
-    path="./docs",
-    glob="**/*.pdf",
-    loader_cls=PyPDFLoader,
-    show_progress=True,
-    use_multithreading=True,
-)
-docs = loader.load()
-print(f"   ✅ Đã tải {len(docs)} trang tài liệu.")
-
-MARKDOWN_SEPARATORS = [
-    "\n#{1,6} ",
-    "```\n",
-    "\n\\*\\*\\**\n",
-    "\n---+\n",
-    "\n___+\n",
-    "\n\n",
-    "\n",
-    " ",
-    "",
-]
-
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1200,
-    chunk_overlap=200,
-    add_start_index=True,
-    strip_whitespace=True,
-    separators=MARKDOWN_SEPARATORS,
-)
-splits = text_splitter.split_documents(docs)
-
-
-# =============================================================================
-# 3. EMBEDDING MODEL (BAAI/bge-m3 chạy trên GPU RTX 4050)
+# 2. EMBEDDING MODEL (BAAI/bge-m3 chạy trên GPU RTX 4050)
 # =============================================================================
 print("\n🧠 Đang khởi động mô hình embedding BAAI/bge-m3 trên GPU...")
 embedding_model = HuggingFaceEmbeddings(
@@ -114,7 +78,7 @@ print("   ✅ Mô hình embedding đã sẵn sàng.")
 
 
 # =============================================================================
-# 4. FAISS VECTORSTORE (Cache - chỉ embed 1 lần duy nhất)
+# 3. FAISS VECTORSTORE & SEMANTIC CHUNKING (Cache - chỉ xử lý khi chưa có index)
 # =============================================================================
 if os.path.exists(FAISS_INDEX_DIR):
     print(f"\n📦 Phát hiện FAISS index đã có tại '{FAISS_INDEX_DIR}'. Đang tải lại...")
@@ -124,9 +88,31 @@ if os.path.exists(FAISS_INDEX_DIR):
         distance_strategy=DistanceStrategy.COSINE,
         allow_dangerous_deserialization=True,
     )
-    print("   ✅ Đã tải FAISS index thành công (bỏ qua bước embedding).")
+    print("   ✅ Đã tải FAISS index thành công (bỏ qua bước đọc PDF & semantic chunking).")
 else:
-    print(f"\n⚙️  Chưa có FAISS index. Đang embedding {len(splits)} chunks lên GPU (lần đầu tiên)...")
+    print(f"\n⚙️  Chưa có FAISS index. Đang khởi tạo cơ sở dữ liệu vector mới...")
+    print("\n📂 Đang tải tài liệu PDF...")
+    loader = DirectoryLoader(
+        path="./docs",
+        glob="**/*.pdf",
+        loader_cls=PyPDFLoader,
+        show_progress=True,
+        use_multithreading=True,
+    )
+    docs = loader.load()
+    print(f"   ✅ Đã tải {len(docs)} trang tài liệu.")
+
+    print("\n✂️  Đang phân đoạn tài liệu theo ngữ nghĩa (SemanticChunker)...")
+    text_splitter = SemanticChunker(
+        embeddings=embedding_model,
+        breakpoint_threshold_type="percentile",
+        breakpoint_threshold_amount=85,
+        add_start_index=True,
+    )
+    splits = text_splitter.split_documents(docs)
+    print(f"   ✅ Đã tạo {len(splits)} semantic chunks.")
+
+    print(f"\n⚙️  Đang embedding {len(splits)} chunks lên GPU (lần đầu tiên)...")
     vectorstore = FAISS.from_documents(
         documents=splits,
         embedding=embedding_model,
