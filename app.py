@@ -18,7 +18,6 @@ except Exception:
     pass
 
 import streamlit_shadcn_ui as ui
-from streamlit_extras.stylable_container import stylable_container
 from streamlit_elements import elements, mui, html
 
 import rag_core
@@ -52,13 +51,13 @@ CUSTOM_CSS = """
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
     /* Global Typography & Light Background */
-    html, body, [class*="css"], .stApp {
+    html, body, .stApp {
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
         background-color: #ffffff !important;
         color: #0f172a !important;
     }
 
-    /* Ẩn header & footer mặc định của Streamlit - Loại bỏ hoàn toàn thanh che khuất trên cùng */
+    /* Ẩn header & footer mặc định của Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header[data-testid="stHeader"] {
@@ -85,7 +84,7 @@ CUSTOM_CSS = """
         letter-spacing: -0.01em;
     }
 
-    /* Sidebar Brand Card */
+    /* Sidebar Brand Card - Cân đối logo và chữ thẳng hàng */
     .sidebar-brand {
         display: flex;
         align-items: center;
@@ -93,26 +92,44 @@ CUSTOM_CSS = """
         background: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 14px;
-        padding: 14px 16px;
+        padding: 12px 14px;
         margin-bottom: 20px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
     }
     .sidebar-brand-icon {
-        font-size: 1.8rem;
+        font-size: 1.6rem;
         line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px;
+        height: 42px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        flex-shrink: 0;
+    }
+    .sidebar-brand-info {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        overflow: hidden;
     }
     .sidebar-brand-title {
-        font-size: 1.02rem;
+        font-size: 0.98rem;
         font-weight: 800;
         color: #0f172a;
         margin: 0;
-        line-height: 1.2;
+        line-height: 1.25;
+        white-space: nowrap;
     }
     .sidebar-brand-subtitle {
         font-size: 0.74rem;
         color: #64748b;
-        margin: 2px 0 0;
+        margin: 3px 0 0;
         font-weight: 500;
+        line-height: 1.2;
+        white-space: nowrap;
     }
 
     /* Style selectbox */
@@ -141,7 +158,7 @@ CUSTOM_CSS = """
         border: 1px solid #0f172a !important;
         border-radius: 12px !important;
         font-weight: 600 !important;
-        box-shadow: 0 3px 6px rgba(15, 23, 42, 0.12) !important;
+        box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08) !important;
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
 
@@ -155,17 +172,21 @@ CUSTOM_CSS = """
     }
 
     .stButton button:hover,
+    .stButton > button:hover,
     button[kind="secondary"]:hover,
-    button[kind="primary"]:hover {
+    button[kind="primary"]:hover,
+    [data-testid="baseButton-secondary"]:hover,
+    [data-testid="baseButton-primary"]:hover {
         background-color: #1e293b !important;
         background: #1e293b !important;
         border-color: #1e293b !important;
         color: #ffffff !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 8px 16px rgba(15, 23, 42, 0.2) !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16) !important;
     }
 
     .stButton button:active,
+    .stButton > button:active,
     button[kind="secondary"]:active,
     button[kind="primary"]:active {
         background-color: #000000 !important;
@@ -185,28 +206,36 @@ CUSTOM_CSS = """
         background: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 16px;
-        padding: 24px 28px;
+        padding: 22px 26px;
         margin-bottom: 24px;
-        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
         box-sizing: border-box;
     }
     .banner-title {
         display: flex;
         align-items: center;
-        gap: 12px;
-        font-size: 1.65rem;
-        font-weight: 800;
-        color: #0f172a;
+        gap: 14px;
         margin: 0 0 8px 0;
-        letter-spacing: -0.02em;
-        line-height: 1.25;
     }
     .banner-icon {
-        font-size: 1.9rem;
+        font-size: 1.8rem;
         line-height: 1;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        width: 46px;
+        height: 46px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        flex-shrink: 0;
+    }
+    .banner-text {
+        font-size: 1.55rem;
+        font-weight: 800;
+        color: #0f172a;
+        letter-spacing: -0.02em;
+        line-height: 1.25;
     }
     .banner-subtitle {
         color: #475569;
@@ -214,6 +243,21 @@ CUSTOM_CSS = """
         margin: 0;
         line-height: 1.6;
         font-weight: 400;
+    }
+
+    /* Container card đồng đều cho các mục gợi ý, không bị đè chữ */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 14px !important;
+        border: 1px solid #e2e8f0 !important;
+        background-color: #ffffff !important;
+        padding: 12px 14px !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+        margin-bottom: 8px !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+        border-color: #cbd5e1 !important;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04) !important;
     }
 
     /* ──────────────── WELCOME PROMPTS ──────────────── */
@@ -515,11 +559,11 @@ def render_separator(key: str):
 # 5. SIDEBAR - CHỌN MÔ HÌNH VỚI TÊN & ƯU ĐIỂM (TÍCH HỢP SHADCN & EXTRAS)
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    # Brand Header
+    # Brand Header - Logo và chữ căn đối
     sidebar_brand_html = (
         '<div class="sidebar-brand">'
         '<div class="sidebar-brand-icon">🎓</div>'
-        '<div>'
+        '<div class="sidebar-brand-info">'
         '<div class="sidebar-brand-title">Lịch Sử Đảng CSVN</div>'
         '<div class="sidebar-brand-subtitle">Trợ lý học thuật RAG v2.2</div>'
         '</div>'
@@ -576,34 +620,16 @@ with st.sidebar:
 
     render_separator(key="side_sep_2")
 
-    # Nút xóa lịch sử hội thoại bọc trong stylable_container của streamlit-extras
-    with stylable_container(
-        key="btn_new_chat",
-        css_styles="""
-            button {
-                background-color: #0f172a !important;
-                color: #ffffff !important;
-                border-radius: 10px !important;
-                border: 1px solid #0f172a !important;
-                font-weight: 600 !important;
-                transition: all 0.2s ease !important;
-            }
-            button:hover {
-                background-color: #1e293b !important;
-                border-color: #1e293b !important;
-                box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15) !important;
-            }
-        """
-    ):
-        if st.button("🗑️ Làm mới cuộc hội thoại", use_container_width=True):
-            st.session_state.messages = []
-            if os.path.exists(CHAT_HISTORY_FILE):
-                try:
-                    os.remove(CHAT_HISTORY_FILE)
-                except Exception:
-                    pass
-            st.session_state.suggested_prompt = None
-            st.rerun()
+    # Nút xóa lịch sử hội thoại chuẩn giao diện đen tối giản
+    if st.button("🗑️ Làm mới cuộc hội thoại", use_container_width=True):
+        st.session_state.messages = []
+        if os.path.exists(CHAT_HISTORY_FILE):
+            try:
+                os.remove(CHAT_HISTORY_FILE)
+            except Exception:
+                pass
+        st.session_state.suggested_prompt = None
+        st.rerun()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -612,8 +638,8 @@ with st.sidebar:
 banner_html = (
     '<div class="main-banner">'
     '<div class="banner-title">'
-    '<span class="banner-icon">🎓</span>'
-    '<span>Hỏi Đáp Giáo Trình Lịch Sử Đảng</span>'
+    '<div class="banner-icon">🎓</div>'
+    '<div class="banner-text">Hỏi Đáp Giáo Trình Lịch Sử Đảng</div>'
     '</div>'
     '<p class="banner-subtitle">'
     'Hệ thống tra cứu học thuật thông minh, trích dẫn chính xác theo từng số trang từ giáo trình, '
@@ -651,7 +677,7 @@ tab_chat, tab_timeline, tab_arch = st.tabs([
 # TAB 1: KHÔNG GIAN HỘI THOẠI & TRÍCH DẪN (CHAT)
 # ═════════════════════════════════════════════════════════════════════════════
 with tab_chat:
-    # Gợi ý câu hỏi khi chưa có tin nhắn (dùng stylable_container của streamlit-extras)
+    # Gợi ý câu hỏi khi chưa có tin nhắn (dùng st.container chuẩn Native)
     if len(st.session_state.messages) == 0 and not active_prompt:
         st.markdown("""
         <div class="welcome-intro">
@@ -663,148 +689,48 @@ with tab_chat:
         col1, col2 = st.columns(2)
 
         with col1:
-            with stylable_container(
-                key="suggest_box_1",
-                css_styles="""
-                    {
-                        border: 1px solid #e2e8f0;
-                        border-radius: 12px;
-                        padding: 12px 14px;
-                        background: #ffffff;
-                        margin-bottom: 12px;
-                        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-                    }
-                    :hover {
-                        border-color: #0f172a;
-                        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
-                        transform: translateY(-2px);
-                    }
-                    button {
-                        border: none !important;
-                        background: transparent !important;
-                        color: #0f172a !important;
-                        text-align: left !important;
-                        font-weight: 700 !important;
-                        padding: 0 !important;
-                        font-size: 0.92rem !important;
-                    }
-                    button:hover {
-                        color: #000000 !important;
-                        background: transparent !important;
-                    }
-                """
-            ):
-                st.markdown("<div style='font-size: 0.78rem; color: #64748b; margin-bottom: 4px;'>Mốc lịch sử 1930 · Trang 27-35</div>", unsafe_allow_html=True)
+            with st.container(border=True):
+                st.markdown(
+                    "<div style='font-size: 0.78rem; font-weight: 600; color: #64748b; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;'>"
+                    "<span>🏛️</span><span>Mốc lịch sử 1930 · Trang 27-35</span>"
+                    "</div>",
+                    unsafe_allow_html=True
+                )
                 if st.button("📜 Cương lĩnh chính trị đầu tiên (1930)", key="suggest_1", use_container_width=True):
                     st.session_state.suggested_prompt = "Nội dung cốt lõi và ý nghĩa lịch sử của Cương lĩnh chính trị đầu tiên của Đảng (năm 1930) là gì?"
                     st.rerun()
 
-            with stylable_container(
-                key="suggest_box_2",
-                css_styles="""
-                    {
-                        border: 1px solid #e2e8f0;
-                        border-radius: 12px;
-                        padding: 12px 14px;
-                        background: #ffffff;
-                        margin-bottom: 12px;
-                        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-                    }
-                    :hover {
-                        border-color: #0f172a;
-                        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
-                        transform: translateY(-2px);
-                    }
-                    button {
-                        border: none !important;
-                        background: transparent !important;
-                        color: #0f172a !important;
-                        text-align: left !important;
-                        font-weight: 700 !important;
-                        padding: 0 !important;
-                        font-size: 0.92rem !important;
-                    }
-                    button:hover {
-                        color: #000000 !important;
-                        background: transparent !important;
-                    }
-                """
-            ):
-                st.markdown("<div style='font-size: 0.78rem; color: #64748b; margin-bottom: 4px;'>Mốc lịch sử 1945 · Trang 89-105</div>", unsafe_allow_html=True)
-                if st.button("⚡ Thắng lợi Cách mạng Tháng Tám (1945)", key="suggest_2", use_container_width=True):
+            with st.container(border=True):
+                st.markdown(
+                    "<div style='font-size: 0.78rem; font-weight: 600; color: #64748b; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;'>"
+                    "<span>⚡</span><span>Mốc lịch sử 1945 · Trang 89-105</span>"
+                    "</div>",
+                    unsafe_allow_html=True
+                )
+                if st.button("🚩 Thắng lợi Cách mạng Tháng Tám (1945)", key="suggest_2", use_container_width=True):
                     st.session_state.suggested_prompt = "Phân tích nguyên nhân thắng lợi và bài học kinh nghiệm của Cách mạng Tháng Tám năm 1945?"
                     st.rerun()
 
         with col2:
-            with stylable_container(
-                key="suggest_box_3",
-                css_styles="""
-                    {
-                        border: 1px solid #e2e8f0;
-                        border-radius: 12px;
-                        padding: 12px 14px;
-                        background: #ffffff;
-                        margin-bottom: 12px;
-                        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-                    }
-                    :hover {
-                        border-color: #0f172a;
-                        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
-                        transform: translateY(-2px);
-                    }
-                    button {
-                        border: none !important;
-                        background: transparent !important;
-                        color: #0f172a !important;
-                        text-align: left !important;
-                        font-weight: 700 !important;
-                        padding: 0 !important;
-                        font-size: 0.92rem !important;
-                    }
-                    button:hover {
-                        color: #000000 !important;
-                        background: transparent !important;
-                    }
-                """
-            ):
-                st.markdown("<div style='font-size: 0.78rem; color: #64748b; margin-bottom: 4px;'>Mốc lịch sử 1986 · Trang 280-310</div>", unsafe_allow_html=True)
-                if st.button("🏛️ Đường lối Đổi mới - Đại hội VI (1986)", key="suggest_3", use_container_width=True):
+            with st.container(border=True):
+                st.markdown(
+                    "<div style='font-size: 0.78rem; font-weight: 600; color: #64748b; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;'>"
+                    "<span>🌐</span><span>Mốc lịch sử 1986 · Trang 280-310</span>"
+                    "</div>",
+                    unsafe_allow_html=True
+                )
+                if st.button("🏢 Đường lối Đổi mới - Đại hội VI (1986)", key="suggest_3", use_container_width=True):
                     st.session_state.suggested_prompt = "Đại hội đại biểu toàn quốc lần thứ VI (1986) của Đảng đã đề ra đường lối đổi mới như thế nào?"
                     st.rerun()
 
-            with stylable_container(
-                key="suggest_box_4",
-                css_styles="""
-                    {
-                        border: 1px solid #e2e8f0;
-                        border-radius: 12px;
-                        padding: 12px 14px;
-                        background: #ffffff;
-                        margin-bottom: 12px;
-                        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-                    }
-                    :hover {
-                        border-color: #0f172a;
-                        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
-                        transform: translateY(-2px);
-                    }
-                    button {
-                        border: none !important;
-                        background: transparent !important;
-                        color: #0f172a !important;
-                        text-align: left !important;
-                        font-weight: 700 !important;
-                        padding: 0 !important;
-                        font-size: 0.92rem !important;
-                    }
-                    button:hover {
-                        color: #000000 !important;
-                        background: transparent !important;
-                    }
-                """
-            ):
-                st.markdown("<div style='font-size: 0.78rem; color: #64748b; margin-bottom: 4px;'>Mốc lịch sử 1954 · Trang 145-162</div>", unsafe_allow_html=True)
-                if st.button("🎯 Chiến thắng Điện Biên Phủ (1954)", key="suggest_4", use_container_width=True):
+            with st.container(border=True):
+                st.markdown(
+                    "<div style='font-size: 0.78rem; font-weight: 600; color: #64748b; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;'>"
+                    "<span>🎯</span><span>Mốc lịch sử 1954 · Trang 145-162</span>"
+                    "</div>",
+                    unsafe_allow_html=True
+                )
+                if st.button("🎖️ Chiến thắng Điện Biên Phủ (1954)", key="suggest_4", use_container_width=True):
                     st.session_state.suggested_prompt = "Ý nghĩa lịch sử của chiến thắng Điện Biên Phủ năm 1954 đối với cuộc kháng chiến chống thực dân Pháp?"
                     st.rerun()
 
