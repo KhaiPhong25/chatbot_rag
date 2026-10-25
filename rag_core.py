@@ -1,11 +1,12 @@
 # =============================================================================
 # RAG CORE - Module lõi dùng chung cho CLI và Web UI
-# Features (v2.0):
-#   - Embedding cục bộ BAAI/bge-m3 (GPU RTX 4050)
+# Features (v2.1):
+#   - Embedding cục bộ BAAI/bge-m3 (GPU RTX 4050, float16)
+#   - GPU Cross-Encoder Reranker BAAI/bge-reranker-v2-m3 (float16)
 #   - Incremental Indexing: tự động phát hiện & nạp tài liệu mới vào FAISS
 #   - Hybrid Search: BM25 (từ khóa chính xác) + FAISS (ngữ nghĩa) kết hợp RRF
-#   - Conversational RAG Chain với Multi-Model Fallback
-#   - Hỗ trợ cả streaming và non-streaming output
+#   - Trích xuất và định dạng trích dẫn nguồn (Trang, File, Điểm Rerank)
+#   - Conversational RAG với Multi-Model Fallback & Streaming
 # =============================================================================
 
 import os
@@ -15,27 +16,31 @@ import pickle
 from pathlib import Path
 from typing import Iterator
 
+import numpy as np
+import torch
 from dotenv import load_dotenv
 
 # LangChain - Document Loading & Splitting
 from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader
 from langchain_experimental.text_splitter import SemanticChunker
+from langchain_core.documents import Document
 
 # LangChain - Embedding & VectorStore
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.vectorstores.utils import DistanceStrategy
 
+# CrossEncoder Reranker
+from sentence_transformers import CrossEncoder
+
 # LangChain - BM25 & Hybrid Retriever
 from langchain_community.retrievers import BM25Retriever
 from langchain_classic.retrievers import EnsembleRetriever
 
-# LangChain - LLM & Chain
+# LangChain - LLM & Prompts
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.runnables.history import RunnableWithMessageHistory
 
 # LangChain - Persistent Chat History
 from langchain_community.chat_message_histories import FileChatMessageHistory
@@ -63,19 +68,23 @@ BM25_CACHE_FILE   = os.path.join(FAISS_INDEX_DIR, "bm25_retriever.pkl")
 
 
 # =============================================================================
-# 2. EMBEDDING MODEL (BAAI/bge-m3 trên GPU)
+# 2. EMBEDDING MODEL (BAAI/bge-m3 trên GPU float16)
 # =============================================================================
-# Biến toàn cục - chỉ khởi tạo một lần, dùng chung cho cả CLI và Web
 _embedding_model = None
 
 def get_embedding_model() -> HuggingFaceEmbeddings:
-    """Singleton: chỉ tải model embedding một lần duy nhất vào VRAM GPU."""
+    """Singleton: chỉ tải model embedding một lần duy nhất vào VRAM GPU (float16)."""
     global _embedding_model
     if _embedding_model is None:
-        print("\n🧠 Đang khởi động mô hình embedding BAAI/bge-m3 trên GPU...")
+        print("\n🧠 Đang khởi động mô hình embedding BAAI/bge-m3 trên GPU (float16)...")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model_kwargs = {"device": device}
+        if device == "cuda":
+            model_kwargs["model_kwargs"] = {"torch_dtype": torch.float16}
+
         _embedding_model = HuggingFaceEmbeddings(
             model_name="BAAI/bge-m3",
-            model_kwargs={"device": "cuda"},
+            model_kwargs=model_kwargs,
             encode_kwargs={"normalize_embeddings": True},
         )
         print("   ✅ Mô hình embedding đã sẵn sàng.")
@@ -83,7 +92,67 @@ def get_embedding_model() -> HuggingFaceEmbeddings:
 
 
 # =============================================================================
-# 3. INCREMENTAL INDEXING - Quản lý manifest & phát hiện tài liệu mới
+# 3. GPU CROSS-ENCODER RERANKER (BAAI/bge-reranker-v2-m3)
+# =============================================================================
+_reranker_model = None
+
+def get_reranker_model() -> CrossEncoder:
+    """Singleton: tải mô hình Cross-Encoder Reranker trên GPU (float16) một lần duy nhất."""
+    global _reranker_model
+    if _reranker_model is None:
+        print("\n🎯 Đang nạp mô hình Reranker BAAI/bge-reranker-v2-m3 trên GPU (float16)...")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model_kwargs = {"torch_dtype": torch.float16} if device == "cuda" else {}
+
+        _reranker_model = CrossEncoder(
+            "BAAI/bge-reranker-v2-m3",
+            device=device,
+            model_kwargs=model_kwargs,
+        )
+        print("   ✅ Mô hình GPU Reranker đã sẵn sàng.")
+    return _reranker_model
+
+
+def rerank_documents(
+    query: str,
+    documents: list[Document],
+    top_k: int = 4,
+    reranker: CrossEncoder | None = None,
+) -> list[Document]:
+    """
+    Chấm điểm lại các candidate documents bằng CrossEncoder trên GPU:
+    - Tính điểm liên quan ngữ nghĩa chéo (Cross-Attention) giữa câu hỏi và đoạn trích.
+    - Chuẩn hóa điểm số theo hàm sigmoid (0.0 -> 1.0) để thể hiện phần trăm độ khớp.
+    - Lưu vào metadata: doc.metadata['rerank_score'].
+    - Sắp xếp và trả về top_k tài liệu phù hợp nhất.
+    """
+    if not documents:
+        return []
+
+    if reranker is None:
+        reranker = get_reranker_model()
+
+    # Chuẩn bị danh sách cặp [query, passage]
+    pairs = [[query, doc.page_content] for doc in documents]
+    raw_scores = reranker.predict(pairs)
+
+    # Sigmoid normalization (0.0 -> 1.0)
+    sigmoid_scores = 1 / (1 + np.exp(-np.array(raw_scores, dtype=np.float32)))
+
+    scored_docs = []
+    for doc, score in zip(documents, sigmoid_scores):
+        scored_doc = Document(
+            page_content=doc.page_content,
+            metadata={**doc.metadata, "rerank_score": float(score)}
+        )
+        scored_docs.append(scored_doc)
+
+    scored_docs.sort(key=lambda d: d.metadata["rerank_score"], reverse=True)
+    return scored_docs[:top_k]
+
+
+# =============================================================================
+# 4. INCREMENTAL INDEXING - Quản lý manifest & phát hiện tài liệu mới
 # =============================================================================
 
 def _compute_file_hash(filepath: str) -> str:
@@ -149,18 +218,14 @@ def _load_and_chunk_files(filepaths: list[str], embedding_model: HuggingFaceEmbe
 
 
 # =============================================================================
-# 4. KHỞI TẠO / CẬP NHẬT VECTORSTORE VÀ BM25 (Incremental)
+# 5. KHỞI TẠO / CẬP NHẬT VECTORSTORE VÀ BM25
 # =============================================================================
 
-def build_or_update_vectorstore(embedding_model: HuggingFaceEmbeddings) -> tuple:
+def build_or_update_vectorstore(embedding_model: HuggingFaceEmbeddings) -> FAISS:
     """
-    Kiểm tra và cập nhật FAISS vectorstore cùng BM25 retriever:
+    Kiểm tra và cập nhật FAISS vectorstore:
     - Nếu chưa có index → khởi tạo mới từ toàn bộ docs/
     - Nếu đã có index + manifest → chỉ xử lý file mới/thay đổi (Incremental)
-    - Luôn đồng bộ lại BM25 từ toàn bộ tài liệu hiện có trong FAISS
-
-    Returns:
-        (vectorstore, all_splits): vectorstore đã cập nhật và danh sách tất cả chunks
     """
     manifest = _load_manifest()
     index_exists = (
@@ -169,42 +234,36 @@ def build_or_update_vectorstore(embedding_model: HuggingFaceEmbeddings) -> tuple
     )
 
     if index_exists:
-        # ------- Chế độ Incremental Indexing -------
         new_files = _get_new_or_changed_files(manifest)
 
         if new_files:
             print(f"\n🔄 Phát hiện {len(new_files)} file PDF mới/thay đổi. Đang cập nhật index...")
-            # Tải FAISS hiện tại
             vectorstore = FAISS.load_local(
                 FAISS_INDEX_DIR,
                 embedding_model,
                 distance_strategy=DistanceStrategy.COSINE,
                 allow_dangerous_deserialization=True,
             )
-            # Chunk & embed chỉ các file mới
             new_splits = _load_and_chunk_files(new_files, embedding_model)
             print(f"\n⚙️  Đang embedding {len(new_splits)} chunks mới vào FAISS...")
             vectorstore.add_documents(new_splits)
             vectorstore.save_local(FAISS_INDEX_DIR)
 
-            # Cập nhật manifest
             for fp in new_files:
                 manifest[fp] = _compute_file_hash(fp)
             _save_manifest(manifest)
             print(f"   ✅ Đã cập nhật FAISS index với {len(new_splits)} chunks mới.")
         else:
-            # Không có gì thay đổi → nạp nhanh từ cache
-            print(f"\n📦 Phát hiện FAISS index đã có và không có file mới. Đang tải cache...")
+            print("\n📦 Phát hiện FAISS index đã có và không có file mới. Đang tải cache...")
             vectorstore = FAISS.load_local(
                 FAISS_INDEX_DIR,
                 embedding_model,
                 distance_strategy=DistanceStrategy.COSINE,
                 allow_dangerous_deserialization=True,
             )
-            print(f"   ✅ Đã tải FAISS index thành công.")
+            print("   ✅ Đã tải FAISS index thành công.")
 
     else:
-        # ------- Khởi tạo lần đầu -------
         all_pdf_files = sorted(str(p) for p in Path(DOCS_DIR).glob("**/*.pdf"))
         if not all_pdf_files:
             raise FileNotFoundError(f"Không tìm thấy file PDF nào trong thư mục '{DOCS_DIR}/'.")
@@ -219,7 +278,6 @@ def build_or_update_vectorstore(embedding_model: HuggingFaceEmbeddings) -> tuple
         )
         vectorstore.save_local(FAISS_INDEX_DIR)
 
-        # Lưu manifest
         for fp in all_pdf_files:
             manifest[fp] = _compute_file_hash(fp)
         _save_manifest(manifest)
@@ -229,42 +287,37 @@ def build_or_update_vectorstore(embedding_model: HuggingFaceEmbeddings) -> tuple
 
 
 # =============================================================================
-# 5. HYBRID RETRIEVER (BM25 + FAISS với Reciprocal Rank Fusion)
+# 6. HYBRID RETRIEVER (BM25 + FAISS kết hợp RRF)
 # =============================================================================
 
-def build_hybrid_retriever(vectorstore: FAISS, k: int = 5) -> EnsembleRetriever:
+def build_hybrid_retriever(vectorstore: FAISS, k: int = 12) -> EnsembleRetriever:
     """
     Tạo Hybrid Retriever kết hợp:
-    - BM25Retriever: tìm kiếm chính xác từ khóa (tốt cho ngày tháng, tên người, số hiệu nghị quyết)
-    - FAISS Retriever: tìm kiếm ngữ nghĩa vector (tốt cho câu hỏi diễn giải, câu hỏi mở)
-    - EnsembleRetriever: gộp kết quả bằng thuật toán Reciprocal Rank Fusion (RRF)
+    - BM25Retriever: tìm kiếm chính xác từ khóa (lấy k ứng viên)
+    - FAISS Retriever: tìm kiếm ngữ nghĩa vector (lấy k ứng viên)
+    - EnsembleRetriever: gộp kết quả bằng Reciprocal Rank Fusion (RRF)
     """
-    # Trích xuất toàn bộ documents từ FAISS docstore để dùng cho BM25
     all_docs = list(vectorstore.docstore._dict.values())
 
-    # Khởi tạo BM25 trên toàn bộ corpus
     bm25_retriever = BM25Retriever.from_documents(all_docs)
     bm25_retriever.k = k
 
-    # FAISS dense retriever
     faiss_retriever = vectorstore.as_retriever(
         search_type="similarity",
         search_kwargs={"k": k},
     )
 
-    # Kết hợp: BM25 (40%) + FAISS (60%)
-    # → FAISS chiếm tỷ trọng cao hơn vì SemanticChunker đã tối ưu cho ngữ nghĩa
     hybrid_retriever = EnsembleRetriever(
         retrievers=[bm25_retriever, faiss_retriever],
         weights=[0.4, 0.6],
     )
 
-    print("   ✅ Hybrid Retriever đã sẵn sàng (BM25 40% + FAISS 60%).")
+    print(f"   ✅ Hybrid Retriever đã sẵn sàng (k={k} ứng viên).")
     return hybrid_retriever
 
 
 # =============================================================================
-# 6. PROMPTS
+# 7. PROMPTS & DẪN NGUỒN
 # =============================================================================
 
 contextualize_q_prompt = ChatPromptTemplate.from_messages([
@@ -278,7 +331,7 @@ contextualize_q_prompt = ChatPromptTemplate.from_messages([
 ])
 
 qa_system_prompt = """Bạn là một trợ lý học thuật chuyên sâu về môn học Lịch sử Đảng Cộng sản Việt Nam.
-Nhiệm vụ của bạn là giải đáp câu hỏi của người học dựa CHÍNH XÁC và DUY NHẤT vào các đoạn ngữ cảnh (Context) được cung cấp dưới đây.
+Nhiệm vụ của bạn là giải đáp câu hỏi của người học dựa CHÍNH XÁC và DUY NHẤT vào các đoạn ngữ cảnh (Context) đã được hệ thống GPU Reranker chọn lọc dưới đây.
 
 ---
 NGUYÊN TẮC BẮT BUỘC:
@@ -294,8 +347,8 @@ NGUYÊN TẮC BẮT BUỘC:
    - Khách quan, chuẩn mực sư phạm, mạch lạc và trang trọng.
    - Trình bày rõ ràng bằng tiêu đề con, gạch đầu dòng hoặc đánh số thứ tự.
 
-4. Dẫn nguồn:
-   - Cuối mỗi câu trả lời, trích dẫn ngắn gọn nguồn dựa trên metadata có trong ngữ cảnh.
+4. Dẫn nguồn số trang:
+   - Trong câu trả lời hoặc cuối phần phản hồi, trích dẫn rõ số trang từ giáo trình (ví dụ: "[Trang 45, Giáo trình Lịch sử Đảng]").
 
 [NGỮ CẢNH ĐƯỢC CUNG CẤP]
 {context}
@@ -309,7 +362,7 @@ qa_prompt = ChatPromptTemplate.from_messages([
 
 
 # =============================================================================
-# 7. LLM & CHAIN
+# 8. LLM & TÍCH HỢP RERANKER TRONG RETRIEVAL PIPELINE
 # =============================================================================
 
 def get_llm(model_name: str) -> ChatOpenAI:
@@ -319,7 +372,7 @@ def get_llm(model_name: str) -> ChatOpenAI:
         api_key=OPENROUTER_API_KEY,
         model=model_name,
         temperature=0,
-        streaming=True,  # Bật streaming cho tất cả models
+        streaming=True,
         default_headers={
             "HTTP-Referer": "https://localhost:8000",
             "X-Title": "LichSuDang-Agentic-RAG-v2",
@@ -327,110 +380,166 @@ def get_llm(model_name: str) -> ChatOpenAI:
     )
 
 
-def _build_rag_chain(model_name: str, retriever):
-    """Xây dựng RAG chain lõi (không có memory wrapper) cho một model cụ thể."""
-    llm         = get_llm(model_name)
-    context_llm = get_llm(model_name)
-
-    contextualize_q_chain = contextualize_q_prompt | context_llm | StrOutputParser()
-
-    def contextualized_question(input_dict: dict):
-        """Viết lại câu hỏi nếu có lịch sử hội thoại."""
-        if input_dict.get("chat_history"):
-            return contextualize_q_chain
-        return input_dict["question"]
-
-    rag_chain = (
-        RunnablePassthrough.assign(
-            context=contextualized_question | retriever
-        )
-        | qa_prompt
-        | llm
-        | StrOutputParser()
-    )
-    return rag_chain
+def get_session_history(session_id: str) -> FileChatMessageHistory:
+    """Lấy lịch sử hội thoại từ file json."""
+    return FileChatMessageHistory(CHAT_HISTORY_FILE)
 
 
-def build_conversational_chain(model_name: str, retriever):
-    """Bọc RAG chain với bộ nhớ hội thoại FileChatMessageHistory."""
-    rag_chain = _build_rag_chain(model_name, retriever)
+def format_context_with_citations(docs: list[Document]) -> str:
+    """
+    Định dạng danh sách documents thành chuỗi ngữ cảnh gửi LLM:
+    Hiển thị rõ ràng tên file, số trang và điểm liên quan từ Reranker.
+    """
+    formatted = []
+    for i, doc in enumerate(docs, 1):
+        page = doc.metadata.get("page", "?")
+        source_file = os.path.basename(doc.metadata.get("source", "textbook_LSD.pdf"))
+        score = doc.metadata.get("rerank_score")
+        score_str = f" | Độ khớp: {score*100:.1f}%" if score is not None else ""
+        header = f"[Tài liệu {i}: {source_file} (Trang {page}){score_str}]"
+        formatted.append(f"{header}\n{doc.page_content.strip()}")
+    return "\n\n---\n\n".join(formatted)
 
-    def get_session_history(session_id: str) -> FileChatMessageHistory:
-        return FileChatMessageHistory(CHAT_HISTORY_FILE)
 
-    conversational_chain = RunnableWithMessageHistory(
-        rag_chain,
-        get_session_history,
-        input_messages_key="question",
-        history_messages_key="chat_history",
-    )
-    return conversational_chain
+def retrieve_and_rerank(
+    query: str,
+    retriever: EnsembleRetriever,
+    top_k: int = 4,
+) -> tuple[str, list[Document]]:
+    """
+    Hai giai đoạn tìm kiếm nâng cao (Retrieve & Rerank):
+    1. Hybrid Retriever lấy ra 12 ứng viên đa dạng (BM25 + FAISS).
+    2. Cross-Encoder Reranker trên GPU RTX 4050 chấm điểm lại và lọc ra top_k đoạn trích tinh hoa nhất.
+    Returns:
+        (context_string, reranked_docs)
+    """
+    candidates = retriever.invoke(query)
+    reranked = rerank_documents(query, candidates, top_k=top_k)
+    context_str = format_context_with_citations(reranked)
+    return context_str, reranked
+
+
+def contextualize_question(
+    question: str,
+    chat_history: list,
+    model_name: str = FREE_MODELS[0],
+) -> str:
+    """Viết lại câu hỏi đầy đủ ngữ cảnh độc lập nếu có lịch sử trò chuyện."""
+    if not chat_history:
+        return question
+    try:
+        llm = get_llm(model_name)
+        chain = contextualize_q_prompt | llm | StrOutputParser()
+        rewritten = chain.invoke({"question": question, "chat_history": chat_history})
+        return rewritten.strip() if rewritten else question
+    except Exception:
+        return question
 
 
 # =============================================================================
-# 8. INVOKE VỚI FALLBACK (Non-streaming - dùng cho CLI đơn giản)
+# 9. INVOKE VỚI FALLBACK (Non-streaming)
 # =============================================================================
 
 def invoke_with_fallback(
     question: str,
-    retriever,
+    retriever: EnsembleRetriever,
     session_id: str = "default_user",
-) -> tuple[str, str]:
+    preferred_models: list[str] | None = None,
+    top_k_rerank: int = 4,
+) -> tuple[str, str, list[Document]]:
     """
-    Thử lần lượt qua từng model, trả về (câu_trả_lời, tên_model).
-    Dùng .invoke() - không streaming.
+    Trả về (câu_trả_lời, tên_model, danh_sách_nguồn_trích_dẫn).
     """
+    models_to_try = preferred_models if preferred_models else FREE_MODELS
+    history = get_session_history(session_id)
+    history_messages = history.messages
+
+    effective_q = contextualize_question(question, history_messages, models_to_try[0])
+    context_str, source_docs = retrieve_and_rerank(
+        effective_q,
+        retriever,
+        top_k=top_k_rerank,
+    )
+
+    messages = qa_prompt.format_messages(
+        context=context_str,
+        chat_history=history_messages,
+        question=question,
+    )
+
     last_error = None
-    for model_name in FREE_MODELS:
+    for model_name in models_to_try:
         try:
-            chain  = build_conversational_chain(model_name, retriever)
-            answer = chain.invoke(
-                {"question": question},
-                config={"configurable": {"session_id": session_id}},
-            )
-            return answer, model_name
+            llm = get_llm(model_name)
+            response = llm.invoke(messages)
+            answer = response.content if hasattr(response, "content") else str(response)
+
+            history.add_user_message(question)
+            history.add_ai_message(answer)
+            return answer, model_name, source_docs
+
         except Exception as e:
             last_error = e
             print(f"   ⚠️  [{model_name}] gặp lỗi: {str(e)[:80]}... Thử model tiếp theo.")
             continue
 
-    raise Exception(f"Tất cả {len(FREE_MODELS)} model đều không phản hồi. Lỗi cuối: {last_error}")
+    raise Exception(f"Tất cả {len(models_to_try)} model đều không phản hồi. Lỗi cuối: {last_error}")
 
 
 # =============================================================================
-# 9. STREAM VỚI FALLBACK (Streaming - dùng cho CLI streaming và Streamlit)
+# 10. STREAM VỚI FALLBACK (Streaming output + Trả về Source Documents)
 # =============================================================================
 
 def stream_with_fallback(
     question: str,
-    retriever,
+    retriever: EnsembleRetriever,
     session_id: str = "default_user",
     preferred_models: list[str] | None = None,
-) -> Iterator[tuple[str, str]]:
+    top_k_rerank: int = 4,
+) -> Iterator[tuple[str, str, list[Document]]]:
     """
-    Generator: stream từng token câu trả lời.
-    Yields (token_str, model_name) từ model đầu tiên phản hồi thành công.
-    
-    Nếu một model báo lỗi trước khi stream bất kỳ token nào
-    → tự động chuyển sang model tiếp theo.
+    Generator: stream từng token câu trả lời kèm danh sách nguồn trích dẫn.
+    Yields: (token_str, model_name, source_documents)
+
+    - source_documents: danh sách các chunks tinh hoa đã qua GPU Reranker kèm điểm số và số trang.
     """
     models_to_try = preferred_models if preferred_models else FREE_MODELS
+    history = get_session_history(session_id)
+    history_messages = history.messages
+
+    # 1. Viết lại câu hỏi nếu có lịch sử trò chuyện
+    effective_q = contextualize_question(question, history_messages, models_to_try[0])
+
+    # 2. Hybrid Retrieve (12 ứng viên) + Rerank trên GPU (top 4 tinh hoa)
+    context_str, source_docs = retrieve_and_rerank(
+        effective_q,
+        retriever,
+        top_k=top_k_rerank,
+    )
+
+    # 3. Tạo messages hoàn chỉnh gửi LLM
+    messages = qa_prompt.format_messages(
+        context=context_str,
+        chat_history=history_messages,
+        question=question,
+    )
+
     last_error = None
 
     for model_name in models_to_try:
         try:
-            chain  = build_conversational_chain(model_name, retriever)
-            token_count = 0
+            llm = get_llm(model_name)
+            full_response = ""
 
-            for token in chain.stream(
-                {"question": question},
-                config={"configurable": {"session_id": session_id}},
-            ):
-                token_count += 1
-                yield token, model_name
+            for chunk in llm.stream(messages):
+                token = chunk.content
+                full_response += token
+                yield token, model_name, source_docs
 
-            # Stream thành công → dừng vòng lặp fallback
-            if token_count > 0:
+            # Nếu stream thành công và có nội dung
+            if full_response.strip():
+                history.add_user_message(question)
+                history.add_ai_message(full_response)
                 return
 
         except Exception as e:

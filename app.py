@@ -1,6 +1,6 @@
 # =============================================================================
 # STREAMLIT WEB UI - Giao diện hỏi đáp Lịch Sử Đảng CSVN
-# Tích hợp: Streaming, Hybrid Search, Incremental Indexing, Multi-Model Fallback
+# Tích hợp: Streaming, Hybrid Search, GPU Reranker, Hộp trích dẫn số trang
 # Phong cách: Nền trắng tối giản kết hợp các nút bấm màu đen (Monochrome Minimalist)
 # =============================================================================
 
@@ -9,6 +9,7 @@ import streamlit as st
 
 from rag_core import (
     get_embedding_model,
+    get_reranker_model,
     build_or_update_vectorstore,
     build_hybrid_retriever,
     stream_with_fallback,
@@ -96,8 +97,6 @@ CUSTOM_CSS = """
         margin: 2px 0 0;
         font-weight: 500;
     }
-
-
 
     /* Style selectbox */
     section[data-testid="stSidebar"] [data-baseweb="select"] {
@@ -261,6 +260,65 @@ CUSTOM_CSS = """
         font-family: 'JetBrains Mono', monospace;
     }
 
+    /* ──────────────── HỘP NGUỒN TRÍCH DẪN SỐ TRANG ──────────────── */
+    div[data-testid="stExpander"] {
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        background-color: #ffffff !important;
+        margin-top: 14px !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+    }
+    div[data-testid="stExpander"] details summary {
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+        color: #0f172a !important;
+        padding: 8px 12px !important;
+    }
+    div[data-testid="stExpander"] details summary:hover {
+        color: #000000 !important;
+    }
+    .source-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 8px;
+        transition: border-color 0.15s ease;
+    }
+    .source-card:last-child {
+        margin-bottom: 0;
+    }
+    .source-card:hover {
+        border-color: #0f172a;
+    }
+    .source-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+    }
+    .source-card-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .source-card-score {
+        font-size: 0.68rem;
+        font-weight: 700;
+        background: #0f172a;
+        color: #ffffff;
+        padding: 2px 8px;
+        border-radius: 9999px;
+    }
+    .source-card-body {
+        font-size: 0.78rem;
+        color: #475569;
+        line-height: 1.5;
+        border-left: 2.5px solid #cbd5e1;
+        padding-left: 10px;
+        margin-top: 4px;
+    }
+
     /* ──────────────── CHAT INPUT BAR ──────────────── */
     [data-testid="stChatInput"] {
         background-color: transparent !important;
@@ -315,14 +373,16 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. KHỞI TẠO HỆ THỐNG RAG (SINGLETON CACHED)
+# 3. KHỞI TẠO HỆ THỐNG RAG (SINGLETON CACHED: BGE-M3 + FAISS + GPU RERANKER)
 # ─────────────────────────────────────────────────────────────────────────────
-@st.cache_resource(show_spinner="🧠 Đang khởi tạo mô hình BAAI/bge-m3 và FAISS Index...")
+@st.cache_resource(show_spinner="🧠 Đang khởi tạo mô hình BAAI/bge-m3 & GPU Reranker...")
 def init_rag_system():
-    """Tải embedding model BGE-M3 (GPU), FAISS Vectorstore và Hybrid Retriever."""
+    """Tải embedding model BGE-M3 (GPU), FAISS Vectorstore, Hybrid Retriever và GPU Reranker."""
     emb = get_embedding_model()
     vs  = build_or_update_vectorstore(emb)
-    ret = build_hybrid_retriever(vs, k=5)
+    ret = build_hybrid_retriever(vs, k=12)
+    # Nạp sẵn mô hình Reranker trên GPU để phản hồi ngay lập tức
+    get_reranker_model()
     return ret
 
 
@@ -342,6 +402,29 @@ if "suggested_prompt" not in st.session_state:
     st.session_state.suggested_prompt = None
 
 
+def render_sources_box(sources: list):
+    """Hiển thị hộp Accordion trích dẫn nguồn số trang từ giáo trình."""
+    if not sources:
+        return
+    with st.expander(f"📚 Nguồn trích dẫn ({len(sources)} đoạn trích từ giáo trình)", expanded=False):
+        for src in sources:
+            page = src.get("page", "?")
+            file_name = src.get("file", "textbook_LSD.pdf")
+            score_pct = src.get("score_pct", 0)
+            snippet = src.get("snippet", "")
+
+            card_html = (
+                f'<div class="source-card">'
+                f'<div class="source-card-header">'
+                f'<span class="source-card-title">📄 <b>Trang {page}</b> · {file_name}</span>'
+                f'<span class="source-card-score">Độ khớp: {score_pct}%</span>'
+                f'</div>'
+                f'<div class="source-card-body">{snippet}</div>'
+                f'</div>'
+            )
+            st.markdown(card_html, unsafe_allow_html=True)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. SIDEBAR - CHỌN MÔ HÌNH VỚI TÊN & ƯU ĐIỂM
 # ─────────────────────────────────────────────────────────────────────────────
@@ -352,7 +435,7 @@ with st.sidebar:
         '<div class="sidebar-brand-icon">🎓</div>'
         '<div>'
         '<div class="sidebar-brand-title">Lịch Sử Đảng CSVN</div>'
-        '<div class="sidebar-brand-subtitle">Trợ lý học thuật RAG v2.0</div>'
+        '<div class="sidebar-brand-subtitle">Trợ lý học thuật RAG v2.1</div>'
         '</div>'
         '</div>'
     )
@@ -458,7 +541,7 @@ if len(st.session_state.messages) == 0:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 8. HIỂN THỊ LỊCH SỬ TIN NHẮN
+# 8. HIỂN THỊ LỊCH SỬ TIN NHẮN (KÈM HỘP TRÍCH DẪN SỐ TRANG)
 # ─────────────────────────────────────────────────────────────────────────────
 for msg in st.session_state.messages:
     avatar_icon = "👤" if msg["role"] == "user" else "🎓"
@@ -471,9 +554,13 @@ for msg in st.session_state.messages:
             )
         st.markdown(msg["content"])
 
+        # Hiển thị trích dẫn nguồn số trang cho các câu trả lời trong lịch sử
+        if msg["role"] == "assistant" and msg.get("sources"):
+            render_sources_box(msg["sources"])
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9. XỬ LÝ NHẬP LIỆU & STREAMING PHẢN HỒI
+# 9. XỬ LÝ NHẬP LIỆU & STREAMING PHẢN HỒI (GPU RERANKED)
 # ─────────────────────────────────────────────────────────────────────────────
 user_input = st.chat_input("Nhập câu hỏi về sự kiện, nhân vật, cương lĩnh, mốc thời gian...")
 
@@ -486,7 +573,7 @@ elif st.session_state.suggested_prompt:
 
 if active_prompt:
     # 1. Thêm tin nhắn của User
-    st.session_state.messages.append({"role": "user", "content": active_prompt, "model": None})
+    st.session_state.messages.append({"role": "user", "content": active_prompt, "model": None, "sources": None})
     with st.chat_message("user", avatar="👤"):
         st.markdown(active_prompt)
 
@@ -503,13 +590,15 @@ if active_prompt:
 
         full_response = ""
         resolved_model = None
+        collected_sources = []
 
         try:
-            for token, model_name in stream_with_fallback(
+            for token, model_name, source_docs in stream_with_fallback(
                 active_prompt,
                 retriever,
                 session_id=st.session_state.session_id,
                 preferred_models=preferred_models,
+                top_k_rerank=4,
             ):
                 if resolved_model is None:
                     resolved_model = model_name
@@ -519,12 +608,27 @@ if active_prompt:
                         unsafe_allow_html=True
                     )
 
+                # Thu thập thông tin trích dẫn nguồn từ GPU Reranker
+                if not collected_sources and source_docs:
+                    for doc in source_docs:
+                        score = doc.metadata.get("rerank_score", 0.0)
+                        collected_sources.append({
+                            "page": doc.metadata.get("page", "?"),
+                            "file": os.path.basename(doc.metadata.get("source", "textbook_LSD.pdf")),
+                            "score_pct": int(score * 100),
+                            "snippet": doc.page_content.strip()[:350] + ("..." if len(doc.page_content.strip()) > 350 else ""),
+                        })
+
                 full_response += token
                 # Hiển thị con trỏ typing ▌
                 response_placeholder.markdown(full_response + " ▌")
 
             # Hoàn tất: bỏ con trỏ typing
             response_placeholder.markdown(full_response)
+
+            # Hiển thị Hộp trích dẫn nguồn số trang ngay bên dưới câu trả lời
+            if collected_sources:
+                render_sources_box(collected_sources)
 
         except Exception as e:
             full_response = f"❌ Không thể nhận phản hồi từ các mô hình: {e}"
@@ -535,4 +639,5 @@ if active_prompt:
             "role": "assistant",
             "content": full_response,
             "model": resolved_model,
+            "sources": collected_sources,
         })
