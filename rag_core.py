@@ -30,7 +30,6 @@ from langchain_core.embeddings import Embeddings
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.vectorstores.utils import DistanceStrategy
-from huggingface_hub import InferenceClient
 
 # CrossEncoder Reranker
 from sentence_transformers import CrossEncoder
@@ -70,91 +69,41 @@ BM25_CACHE_FILE   = os.path.join(FAISS_INDEX_DIR, "bm25_retriever.pkl")
 
 
 # =============================================================================
-# 2. EMBEDDING MODEL (Hugging Face Serverless Inference API / Local BAAI/bge-m3)
+# 2. EMBEDDING MODEL (BAAI/bge-m3 cục bộ trên GPU float16)
 # =============================================================================
-
-class HuggingFaceInferenceEmbeddings(Embeddings):
-    """
-    Embedding Model sử dụng Hugging Face Serverless Inference API:
-    - Zero RAM Footprint: Không tải model 2.2GB về máy, hoàn toàn không tốn RAM.
-    - Cực kỳ lý tưởng cho môi trường tài nguyên hạn chế như Streamlit Cloud (1GB RAM).
-    - Tạo vector 1024 chiều tương thích 100% với FAISS index BAAI/bge-m3.
-    """
-    def __init__(self, model_name: str = "BAAI/bge-m3", token: str | None = None):
-        self.model_name = model_name
-        self.token = token or os.getenv("HF_TOKEN")
-        if not self.token:
-            raise ValueError("Không tìm thấy HF_TOKEN trong biến môi trường hoặc file .env!")
-        self.client = InferenceClient(token=self.token)
-
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        """Nhúng danh sách văn bản theo batch."""
-        embeddings = []
-        batch_size = 16
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i : i + batch_size]
-            res = self.client.feature_extraction(batch, model=self.model_name)
-            if hasattr(res, "tolist"):
-                res = res.tolist()
-            if isinstance(res, list) and len(res) > 0 and not isinstance(res[0], list):
-                embeddings.append(res)
-            else:
-                embeddings.extend(res)
-        return embeddings
-
-    def embed_query(self, text: str) -> list[float]:
-        """Nhúng một câu truy vấn của người dùng."""
-        res = self.client.feature_extraction(text, model=self.model_name)
-        if hasattr(res, "tolist"):
-            res = res.tolist()
-        if isinstance(res, list) and len(res) > 0 and isinstance(res[0], list):
-            return res[0]
-        return res
-
-
 _embedding_model = None
 
-def get_embedding_model() -> Embeddings:
-    """
-    Singleton: Khởi tạo mô hình Embedding.
-    Ưu tiên 1: Hugging Face Serverless Inference API (Zero RAM, tối ưu tuyệt đối cho Streamlit Cloud).
-    Fallback 2: Tải mô hình BAAI/bge-m3 cục bộ (GPU/CPU) nếu token chưa được cấp quyền Inference.
-    """
+def get_embedding_model() -> HuggingFaceEmbeddings:
+    """Singleton: chỉ tải mô hình embedding BAAI/bge-m3 một lần duy nhất vào VRAM GPU (float16)."""
     global _embedding_model
     if _embedding_model is None:
-        hf_token = os.getenv("HF_TOKEN")
-        use_api = os.getenv("USE_HF_INFERENCE_API", "true").lower() in ("true", "1", "yes")
-
-        if use_api and hf_token:
-            try:
-                print("\n🌐 Đang kiểm tra Hugging Face Serverless Inference API cho BAAI/bge-m3...")
-                emb = HuggingFaceInferenceEmbeddings(model_name="BAAI/bge-m3", token=hf_token)
-                # Kiểm tra kết nối nhanh bằng 1 câu truy vấn ngắn
-                emb.embed_query("Đảng Cộng sản Việt Nam")
-                _embedding_model = emb
-                print("   ✅ Kết nối Hugging Face Serverless Inference API thành công (Chế độ Zero RAM - Sẵn sàng cho Streamlit Cloud).")
-                return _embedding_model
-            except Exception as e:
-                err_msg = str(e)
-                if "403" in err_msg or "permissions" in err_msg.lower():
-                    print("   ⚠️  Token HF_TOKEN chưa có quyền 'Inference: Make calls to the serverless Inference API'.")
-                    print("   👉 Vui lòng vào https://huggingface.co/settings/tokens bật quyền Inference cho token.")
-                else:
-                    print(f"   ⚠️  Không thể kết nối Serverless Inference API: {err_msg[:100]}...")
-                print("   🔄 Đang tự động chuyển sang mô hình Embedding cục bộ (Local Weights)...")
-
-        print("\n🧠 Đang khởi động mô hình embedding BAAI/bge-m3 cục bộ (Local weights)...")
         device = "cuda" if torch.cuda.is_available() else "cpu"
+        device_label = "GPU (CUDA float16)" if device == "cuda" else "CPU"
+        print(f"\n🧠 Đang khởi động mô hình embedding BAAI/bge-m3 trên {device_label}...")
+
         model_kwargs = {"device": device}
         if device == "cuda":
             model_kwargs["model_kwargs"] = {"torch_dtype": torch.float16}
 
-        _embedding_model = HuggingFaceEmbeddings(
-            model_name="BAAI/bge-m3",
-            model_kwargs=model_kwargs,
-            encode_kwargs={"normalize_embeddings": True},
-        )
-        print("   ✅ Mô hình embedding cục bộ đã sẵn sàng.")
+        try:
+            _embedding_model = HuggingFaceEmbeddings(
+                model_name="BAAI/bge-m3",
+                model_kwargs=model_kwargs,
+                encode_kwargs={"normalize_embeddings": True},
+            )
+        except Exception as e:
+            if device == "cuda":
+                print(f"   ⚠️ Lỗi nạp mô hình trên CUDA ({e}), tự động fallback sang CPU...")
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                _embedding_model = HuggingFaceEmbeddings(
+                    model_name="BAAI/bge-m3",
+                    model_kwargs={"device": "cpu"},
+                    encode_kwargs={"normalize_embeddings": True},
+                )
+            else:
+                raise e
+        print("   ✅ Mô hình embedding BAAI/bge-m3 đã sẵn sàng.")
     return _embedding_model
 
 
@@ -164,25 +113,37 @@ def get_embedding_model() -> Embeddings:
 _reranker_model = None
 
 def get_reranker_model() -> CrossEncoder | None:
-    """
-    Singleton: Khởi tạo mô hình Cross-Encoder Reranker.
-    - Trên môi trường có GPU NVIDIA (CUDA): Nạp mô hình float16 tối ưu độ chính xác.
-    - Trên môi trường không có GPU (CPU / Streamlit Cloud): Tự động tắt để tránh tràn RAM (OOM limit 1GB).
-    """
+    """Singleton: tải mô hình Cross-Encoder Reranker trên GPU (float16) một lần duy nhất."""
     global _reranker_model
     if _reranker_model is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        if device != "cuda":
-            print("\n💡 Đang chạy trên môi trường CPU/Cloud (không có CUDA GPU): Tự động bỏ qua GPU Reranker để tối ưu bộ nhớ (<500MB RAM).")
-            return None
+        device_label = "GPU (CUDA float16)" if device == "cuda" else "CPU"
+        print(f"\n🎯 Đang nạp mô hình Reranker BAAI/bge-reranker-v2-m3 trên {device_label}...")
 
-        print("\n🎯 Đang nạp mô hình Reranker BAAI/bge-reranker-v2-m3 trên GPU (float16)...")
-        _reranker_model = CrossEncoder(
-            "BAAI/bge-reranker-v2-m3",
-            device="cuda",
-            model_kwargs={"torch_dtype": torch.float16},
-        )
-        print("   ✅ Mô hình GPU Reranker đã sẵn sàng.")
+        model_kwargs = {"torch_dtype": torch.float16} if device == "cuda" else {}
+        try:
+            _reranker_model = CrossEncoder(
+                "BAAI/bge-reranker-v2-m3",
+                device=device,
+                model_kwargs=model_kwargs,
+            )
+        except Exception as e:
+            if device == "cuda":
+                print(f"   ⚠️ Lỗi nạp Reranker trên CUDA ({e}), tự động fallback sang CPU...")
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                try:
+                    _reranker_model = CrossEncoder(
+                        "BAAI/bge-reranker-v2-m3",
+                        device="cpu",
+                    )
+                except Exception as ex_cpu:
+                    print(f"   ⚠️ Không thể nạp Reranker ({ex_cpu}), tiếp tục chạy Hybrid Search...")
+                    return None
+            else:
+                print(f"   ⚠️ Không thể nạp Reranker ({e}), tiếp tục chạy Hybrid Search...")
+                return None
+        print("   ✅ Mô hình Reranker BAAI/bge-reranker-v2-m3 đã sẵn sàng.")
     return _reranker_model
 
 
