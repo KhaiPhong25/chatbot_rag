@@ -39,11 +39,11 @@ load_dotenv()
 #    Danh sách theo thứ tự ưu tiên - tự động fallback nếu model trước bị lỗi
 # =============================================================================
 FREE_MODELS = [
-    "google/gemini-2.0-flash-exp:free",       # Tiếng Việt xuất sắc, nhanh
-    "qwen/qwen-2.5-72b-instruct:free",        # 72B, rất mạnh, hiểu văn phong học thuật
-    "meta-llama/llama-3.3-70b-instruct:free", # Llama 70B, tuân thủ prompt tốt
-    "deepseek/deepseek-r1:free",              # Mô hình suy luận sâu
-    "nvidia/nemotron-3.5-super-vl:free",      # Nvidia Nemotron
+    "nvidia/nemotron-3.5-super-vl:free",                  # Ưu tiên 1: NVIDIA Nemotron 3.5 Super VL (rất mạnh, context 1M)
+    "nvidia/nemotron-3.5-lightning:free",                 # Fallback 1: NVIDIA Nemotron 3.5 Lightning (tốc độ nhanh)
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", # Fallback 2: NVIDIA Nemotron 30B Reasoning (suy luận sâu)
+    "xingchen-agi/xing4.0-29b-a4b:free",                  # Fallback 3: XingChen 29B (đa ngôn ngữ tốt)
+    "recursive/flint-v1.0:free",                          # Fallback 4: Recursive Flint (hỗ trợ ngữ cảnh dài)
 ]
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
