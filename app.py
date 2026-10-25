@@ -571,16 +571,6 @@ with st.sidebar:
     )
     st.markdown(sidebar_brand_html, unsafe_allow_html=True)
 
-    # Metric card bằng shadcn/ui
-    render_metric_card(
-        label="Kho Ngữ Liệu Chuẩn",
-        value="398 Trang",
-        description="Giáo trình Lịch sử Đảng CSVN",
-        key="side_metric_kb"
-    )
-
-    render_separator(key="side_sep_1")
-
     st.markdown("### 🤖 Mô hình Phản Hồi")
 
     MODEL_OPTIONS = {
@@ -592,15 +582,6 @@ with st.sidebar:
         "recursive/flint-v1.0:free": "Recursive Flint v1.0 (Ổn định)",
     }
 
-    MODEL_TAGS = {
-        "auto": "⚡ Tự động Fallback",
-        "nvidia/nemotron-3.5-super-vl:free": "Ngữ cảnh 1M",
-        "nvidia/nemotron-3.5-lightning:free": "Tốc độ phản hồi cao",
-        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": "Suy luận logic",
-        "xingchen-agi/xing4.0-29b-a4b:free": "Tổng hợp kiến thức",
-        "recursive/flint-v1.0:free": "Độ ổn định cao",
-    }
-
     selected_model_key = st.selectbox(
         "Chọn mô hình phản hồi:",
         options=list(MODEL_OPTIONS.keys()),
@@ -609,16 +590,7 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    # Badges thông số hệ thống bằng shadcn/ui
-    render_badges(
-        items=[
-            {"text": MODEL_TAGS.get(selected_model_key, "Tối ưu"), "variant": "secondary"},
-            {"text": "GPU: RTX 4050", "variant": "outline"},
-        ],
-        key="side_badges_sys"
-    )
-
-    render_separator(key="side_sep_2")
+    render_separator(key="side_sep_action")
 
     # Nút xóa lịch sử hội thoại chuẩn giao diện đen tối giản
     if st.button("🗑️ Làm mới cuộc hội thoại", use_container_width=True):
@@ -666,10 +638,9 @@ elif st.session_state.suggested_prompt:
 # ─────────────────────────────────────────────────────────────────────────────
 # 8. HỆ THỐNG TABS ĐA NĂNG (CHAT, TIMELINE, ARCHITECTURE)
 # ─────────────────────────────────────────────────────────────────────────────
-tab_chat, tab_timeline, tab_arch = st.tabs([
+tab_chat, tab_timeline = st.tabs([
     "💬 Hỏi Đáp & Trích Dẫn",
-    "🏛️ Mốc Lịch Sử Đảng (Interactive Timeline)",
-    "📊 Kiến Trúc RAG & Tri Thức"
+    "🏛️ Mốc Lịch Sử Đảng (Interactive Timeline)"
 ])
 
 
@@ -908,59 +879,4 @@ with tab_timeline:
             if st.button(f"🔍 Mốc {ev['year']}", key=f"btn_tl_{ev['year']}", use_container_width=True):
                 st.session_state.suggested_prompt = ev["query"]
                 st.rerun()
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# TAB 3: KIẾN TRÚC RAG & TRI THỨC (STREAMLIT-SHADCN-UI)
-# ═════════════════════════════════════════════════════════════════════════════
-with tab_arch:
-    st.markdown("""
-    <div style="margin-bottom: 16px;">
-        <h3 style="font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0 0 4px 0;">📊 Kiến Trúc RAG Hai Tầng & Chỉ Số Hệ Thống</h3>
-        <p style="font-size: 0.85rem; color: #64748b; margin: 0;">Tổng quan thông số kỹ thuật, quy trình trích xuất và cơ chế bảo đảm tính chính xác học thuật.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    c1, c2 = st.columns(2)
-    with c1:
-        render_metric_card(
-            label="Kho Ngữ Liệu Học Thuật",
-            value="398 Trang PDF",
-            description="Giáo trình Lịch sử Đảng CSVN chuẩn Bộ GD&ĐT",
-            key="arch_m1"
-        )
-        render_metric_card(
-            label="Truy Vấn Lai (Hybrid Search)",
-            value="BM25 + FAISS Dense",
-            description="BM25 bắt mốc sự kiện/năm + FAISS bắt ngữ nghĩa",
-            key="arch_m2"
-        )
-    with c2:
-        render_metric_card(
-            label="GPU Cross-Encoder Reranker",
-            value="bge-reranker-v2-m3",
-            description="RTX 4050 · float16 · Lọc ra Top 4 đoạn trích tinh hoa",
-            key="arch_m3"
-        )
-        render_metric_card(
-            label="Bộ Phản Hồi LLM (Fallback)",
-            value="5 Mô Hình Free",
-            description="OpenRouter API · Tự động chuyển mạch khi gặp nghẽn",
-            key="arch_m4"
-        )
-
-    render_separator(key="arch_sep_1")
-
-    st.markdown("""
-    #### ⚙️ Cơ Chế Xử Lý 2 Giai Đoạn (Two-stage Retrieval Pipeline)
-    1. **Giai đoạn 1 - Quét ứng viên (Candidate Retrieval)**:
-       - Khi người dùng gửi câu hỏi, hệ thống kích hoạt đồng thời **BM25** (quét từ khóa chính xác, tên hội nghị, mốc năm) và **FAISS Vectorstore** (quét vector ngữ nghĩa BGE-M3).
-       - Thuật toán **RRF (Reciprocal Rank Fusion)** tổng hợp và trích xuất **12 đoạn ứng viên** triển vọng nhất.
-    2. **Giai đoạn 2 - Chấm điểm chéo trên GPU (GPU Cross-Attention Reranking)**:
-       - 12 ứng viên được đưa trực tiếp vào card **NVIDIA RTX 4050** chạy mô hình `BAAI/bge-reranker-v2-m3` ở định dạng `float16`.
-       - Reranker so sánh tương quan ngữ nghĩa sâu từng cặp `[Câu hỏi, Đoạn trích]`, chuẩn hóa điểm số bằng hàm sigmoid ($0.0 \to 1.0$).
-       - Chọn ra **Top 4 đoạn trích tinh hoa nhất** gửi vào context của LLM.
-    3. **Giai đoạn 3 - Trích dẫn số trang chính xác (Precise Page Citation)**:
-       - Mỗi câu trả lời đều đi kèm hộp Accordion hiển thị chính xác **Số trang giáo trình**, **Tên file nguồn**, **Độ khớp %** và **Đoạn trích dẫn nguyên văn**.
-    """)
 
