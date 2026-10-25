@@ -564,18 +564,18 @@ with st.sidebar:
         '<div class="sidebar-brand">'
         '<div class="sidebar-brand-icon">🎓</div>'
         '<div class="sidebar-brand-info">'
-        '<div class="sidebar-brand-title">Lịch Sử Đảng CSVN</div>'
-        '<div class="sidebar-brand-subtitle">Trợ lý học thuật RAG v2.2</div>'
+        '<div class="sidebar-brand-title">Lịch Sử Đảng</div>'
+        '<div class="sidebar-brand-subtitle">Trợ lý học thuật</div>'
         '</div>'
         '</div>'
     )
     st.markdown(sidebar_brand_html, unsafe_allow_html=True)
 
-    st.markdown("### 🤖 Mô hình Phản Hồi")
+    st.markdown("### Mô hình Phản Hồi")
 
     MODEL_OPTIONS = {
-        "auto": "⚡ Tự động (Tối ưu)",
-        "nvidia/nemotron-3.5-super-vl:free": "Nemotron 3.5 Super VL (Ngữ cảnh 1M)",
+        "auto": "Tự động tối ưu mô hình",
+        "nvidia/nemotron-3.5-super-vl:free": "Nemotron 3.5 Super VL (Ngữ cảnh nhiều)",
         "nvidia/nemotron-3.5-lightning:free": "Nemotron 3.5 Lightning (Tốc độ cao)",
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": "Nemotron 30B Reasoning (Suy luận)",
         "xingchen-agi/xing4.0-29b-a4b:free": "XingChen 29B (Tổng hợp)",
@@ -593,7 +593,7 @@ with st.sidebar:
     render_separator(key="side_sep_action")
 
     # Nút xóa lịch sử hội thoại chuẩn giao diện đen tối giản
-    if st.button("🗑️ Làm mới cuộc hội thoại", use_container_width=True):
+    if st.button("Làm mới cuộc hội thoại", use_container_width=True):
         st.session_state.messages = []
         if os.path.exists(CHAT_HISTORY_FILE):
             try:
@@ -640,7 +640,7 @@ elif st.session_state.suggested_prompt:
 # ─────────────────────────────────────────────────────────────────────────────
 tab_chat, tab_timeline = st.tabs([
     "💬 Hỏi Đáp & Trích Dẫn",
-    "🏛️ Mốc Lịch Sử Đảng (Interactive Timeline)"
+    "🏛️ Mốc Lịch Sử Đảng"
 ])
 
 

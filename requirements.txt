@@ -1,5 +1,5 @@
 # =============================================================================
-# REQUIREMENTS FOR RAG CHATBOT v2.0 - LỊCH SỬ ĐẢNG CỘNG SẢN VIỆT NAM
+# REQUIREMENTS FOR RAG CHATBOT v2.2 - LỊCH SỬ ĐẢNG CỘNG SẢN VIỆT NAM
 # =============================================================================
 
 # --- LangChain Core & Ecosystem ---

@@ -1,90 +1,109 @@
-# 📚 RAG Chatbot - Hỏi Đáp Lịch Sử Đảng Cộng Sản Việt Nam
+# 📚 RAG Chatbot v2.2 - Trợ Lý Học Thuật Lịch Sử Đảng Cộng Sản Việt Nam
 
-Ứng dụng Chatbot hỏi đáp thông minh dựa trên kỹ thuật **RAG (Retrieval-Augmented Generation)**, cho phép tra cứu, trích xuất thông tin chuẩn xác và giải đáp các câu hỏi học tập từ giáo trình *Lịch sử Đảng Cộng sản Việt Nam*.
+Hệ thống tra cứu học thuật và hỏi đáp thông minh dựa trên kỹ thuật **RAG Hai Tầng (Two-Stage Retrieval-Augmented Generation)** tiên tiến, được thiết kế chuyên sâu nhằm giải đáp các câu hỏi học tập, nghiên cứu và ôn thi từ giáo trình chuẩn *Lịch sử Đảng Cộng sản Việt Nam* (Bộ GD&ĐT).
 
-Dự án được tối ưu hóa toàn diện bằng việc kết hợp **Embedding cục bộ qua GPU (bge-m3)**, **cơ sở dữ liệu vector FAISS (có cơ chế cache)**, **bộ nhớ hội thoại đa lượt lưu trữ vĩnh viễn (FileChatMessageHistory)**, và **cơ chế tự động dự phòng (Multi-Model Fallback) giữa 5 mô hình LLM miễn phí** trên nền tảng OpenRouter.
-
----
-
-## ✨ Tính Năng Nổi Bật
-
-* **🚀 100% Free Tier:** Vận hành hoàn toàn bằng các mô hình LLM mã nguồn mở chất lượng cao thông qua OpenRouter API không tốn phí.
-* **🔄 Tự Động Fallback Giữa Các Mô Hình Miễn Phí (Multi-Model Fallback):** Hệ thống ưu tiên cao nhất mô hình xuất sắc của NVIDIA và tự động chuyển đổi thông minh giữa các mô hình miễn phí đang hoạt động ổn định trên OpenRouter:
-  1. `nvidia/nemotron-3.5-super-vl:free` – **(Ưu tiên số 1)** Siêu mô hình từ NVIDIA, cửa sổ ngữ cảnh cực lớn 1.000.000 tokens, khả năng đọc hiểu ngữ cảnh học thuật và trả lời tiếng Việt xuất sắc.
-  2. `nvidia/nemotron-3.5-lightning:free` – **(Fallback 1)** Tốc độ xử lý siêu tốc, độ trễ cực thấp.
-  3. `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` – **(Fallback 2)** Mô hình 30B chuyên sâu về suy luận logic (Reasoning).
-  4. `xingchen-agi/xing4.0-29b-a4b:free` – **(Fallback 3)** Mô hình 29B tối ưu năng lực đa ngôn ngữ.
-  5. `recursive/flint-v1.0:free` – **(Fallback 4)** Lớp dự phòng ổn định với context dài 262k tokens.
-* **🧠 Trí Nhớ Ngữ Cảnh Đa Lượt (Multi-turn Memory):**
-  * Tự động nhận diện đại từ thay thế (*"ông ấy", "sự kiện đó", "khi nào"*) và viết lại câu hỏi thành truy vấn độc lập trước khi tìm kiếm vector.
-  * Tích hợp `FileChatMessageHistory` lưu lịch sử trò chuyện bền vững vào file `chat_history.json`.
-  * Hỗ trợ lệnh `clear` để làm mới ngữ cảnh trò chuyện bất cứ lúc nào.
-* **✂️ Phân Đoạn Theo Ngữ Nghĩa (Semantic Chunking):** Ứng dụng `SemanticChunker` thay thế cho việc cắt cứng theo số ký tự. Hệ thống tự động đo lường khoảng cách vector giữa các câu kế tiếp và tách đoạn khi có sự biến chuyển chủ đề (ngưỡng percentile 85%), giúp bảo toàn trọn vẹn ngữ cảnh của từng sự kiện lịch sử.
-* **⚡ Tối Ưu Tốc Độ Với FAISS Cache:** Chỉ đọc tài liệu PDF và tính toán Semantic Embedding một lần duy nhất lúc khởi tạo. Các lần chạy tiếp theo nạp trực tiếp chỉ mục từ thư mục `faiss_index/` trong chưa đầy 2 giây mà không cần xử lý lại văn bản.
-* **🎯 Embedding Tiếng Việt Đỉnh Cao:** Sử dụng mô hình `BAAI/bge-m3` tối ưu đa ngôn ngữ, tăng tốc phần cứng bằng GPU NVIDIA (CUDA) với khoảng cách Cosine Similarity.
-* **📖 Trích Dẫn Nguồn Minh Bạch & Chống Ảo Giác:**
-  * Prompt thiết kế theo chuẩn học thuật sư phạm, chỉ trả lời dựa trên ngữ cảnh giáo trình được cung cấp.
-  * Mỗi phản hồi đều trích dẫn rõ số trang trong giáo trình để người học dễ dàng đối soát.
+Dự án sở hữu kiến trúc hiện đại, hỗ trợ song song cả **Giao diện Web Streamlit (Monochrome Minimalist)** và **Giao diện Dòng lệnh (CLI Terminal)**, tích hợp **Streaming Output thời gian thực**, **Truy vấn lai Hybrid Search (BM25 + FAISS Dense Vector)**, **GPU Cross-Encoder Reranker (`BAAI/bge-reranker-v2-m3`)** trên card đồ họa NVIDIA RTX, cùng **Cơ chế tự động dự phòng (Multi-Model Fallback) giữa 5 mô hình LLM miễn phí** trên nền tảng OpenRouter.
 
 ---
 
-## 🏗️ Kiến Trúc Hệ Thống
+## ✨ Điểm Nổi Bật & Tính Năng Mới (v2.2)
+
+* **🌐 Giao Diện Web Streamlit Đẳng Cấp (Monochrome Minimalist):**
+  * Tông màu trắng thanh lịch kết hợp các điểm nhấn nút bấm màu đen sang trọng.
+  * **2 Không Gian Chức Năng (Tabs):**
+    1. `💬 Hỏi Đáp & Trích Dẫn`: Khung chat tương tác mượt mà, hỗ trợ Streaming hiển thị từng từ theo thời gian thực, các thẻ câu hỏi gợi ý nhanh theo chủ đề mốc lịch sử (1930, 1945, 1954, 1986).
+    2. `🏛️ Mốc Lịch Sử Đảng`: Trục thời gian trực quan tích hợp thẻ tương tác Material-UI (thông qua `streamlit-elements`), tóm tắt các sự kiện bản lề, dẫn chiếu số trang giáo trình và hỗ trợ gửi câu hỏi 1-click.
+  * Tùy chọn linh hoạt mô hình phản hồi ngay trên Sidebar.
+* **⚡ Phản Hồi Dạng Dòng Chảy (Real-time Streaming):** Cả phiên bản Web lẫn CLI Terminal đều stream câu trả lời liên tục theo từng token, giảm thiểu tối đa độ trễ chờ đợi (Time-to-First-Token cực thấp).
+* **🎯 Truy Vấn Lai Kết Hợp (Hybrid Search: BM25 + FAISS Dense):**
+  * **BM25 Retriever:** Bắt trúng chính xác các từ khóa đặc thù, tên riêng lãnh tụ, địa danh, tên hội nghị và các mốc năm (1930, 1945, 1954, 1975, 1986...).
+  * **FAISS Dense Retriever (BGE-M3):** Bắt trọn ngữ nghĩa đa tầng và câu hỏi diễn đạt tự nhiên của người dùng.
+  * **Reciprocal Rank Fusion (RRF):** Kết hợp và trích xuất đồng thời 12 đoạn văn bản ứng viên tiềm năng nhất.
+* **🧠 GPU Cross-Encoder Reranker (`BAAI/bge-reranker-v2-m3`):**
+  * Tận dụng sức mạnh tính toán song song trên GPU NVIDIA (RTX 4050, `torch.float16`) để thực hiện Cross-Attention giữa câu hỏi và từng đoạn trích.
+  * Chuẩn hóa điểm tương đồng theo phân phối Sigmoid ($0.0 \to 1.0$) và chọn lọc ra **Top 4 đoạn trích tinh hoa nhất** chuyển vào ngữ cảnh của LLM.
+* **📖 Hộp Trích Dẫn Nguồn Minh Bạch & Chống Ảo Giác:**
+  * Mỗi câu trả lời của trợ lý đều đi kèm hộp Accordion chi tiết: **Số trang cụ thể trong giáo trình**, **Tên file nguồn**, **Độ khớp chính xác (%)** và **Đoạn trích dẫn nguyên văn** để đối chiếu học thuật.
+* **🔄 Tự Động Cập Nhật Ngữ Liệu Mới (Incremental Indexing):**
+  * Hệ thống tự động quét và tính mã băm MD5 các file PDF trong thư mục `docs/`. Khi có file mới hoặc thay đổi, hệ thống tự nạp bổ sung vào FAISS Vectorstore mà không cần xóa cache thủ công.
+* **🤖 Multi-Model Fallback 100% Free (OpenRouter API):**
+  * Tự động điều phối và chuyển mạch thông minh giữa 5 mô hình mã nguồn mở hàng đầu:
+    1. `nvidia/nemotron-3.5-super-vl:free` – (Mặc định) Ngữ cảnh 1.000.000 tokens, đọc hiểu tiếng Việt xuất sắc.
+    2. `nvidia/nemotron-3.5-lightning:free` – Tốc độ phản hồi cực nhanh, độ trễ thấp.
+    3. `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` – Chuyên sâu suy luận logic phức tạp.
+    4. `xingchen-agi/xing4.0-29b-a4b:free` – Năng lực tổng hợp kiến thức đa tầng.
+    5. `recursive/flint-v1.0:free` – Lớp dự phòng bền bỉ với ngữ cảnh dài 262k tokens.
+* **🧠 Bộ Nhớ Hội Thoại Đa Lượt (Multi-turn Contextual Memory):**
+  * Tự động giải quyết các đại từ liên hệ (*"ông ấy", "sự kiện đó", "kết quả ra sao"*) bằng cách viết lại câu hỏi hoàn chỉnh trước khi tìm kiếm.
+  * Lưu trữ lịch sử đàm thoại liên tục vào `chat_history.json`.
+
+---
+
+## 🏗️ Kiến Trúc Hệ Thống (Two-Stage RAG Pipeline)
 
 ```mermaid
 flowchart TD
-    subgraph Ingestion ["1. Quy trình nạp & xử lý dữ liệu (Chỉ chạy khi chưa có FAISS cache)"]
-        PDF["docs/*.pdf (Giáo trình PDF)"] --> Loader["PyPDFLoader / DirectoryLoader"]
-        EmbedInit["HuggingFace Embedding\n(BAAI/bge-m3 via GPU/CPU)"]
-        Loader & EmbedInit --> Splitter["SemanticChunker\n(Ngắt đoạn theo ngữ nghĩa percentile=85)"]
-        Splitter --> Index[("FAISS Vector Index (faiss_index/)")]
+    subgraph DataIngestion ["1. Nạp & Cập Nhật Dữ Liệu Tự Động (Incremental)"]
+        PDF["docs/*.pdf (Giáo trình PDF)"] --> MD5Check{"Kiểm tra mã băm MD5"}
+        MD5Check -->|Chưa đổi| UseCache["Nạp FAISS Index từ faiss_index/"]
+        MD5Check -->|Có file mới| PyPDF["PyPDFLoader (docs)"]
+        PyPDF --> Chunking["SemanticChunker (BAAI/bge-m3)"]
+        Chunking --> UpdateIndex[("FAISS Vector Index")]
     end
 
-    subgraph Chatbot ["2. Luồng hỏi đáp đàm thoại RAG"]
-        User(["👤 Người dùng"]) <--> CLI["Giao diện dòng lệnh (CLI Terminal)"]
-        CLI --> History[("📁 chat_history.json\n(Lịch sử cuộc trò chuyện)")]
-        CLI --> ContextChain["Contextualize Chain\n(Viết lại câu hỏi theo ngữ cảnh)"]
-        History -.-> ContextChain
-        ContextChain --> Retriever["FAISS Retriever (Top-5 Chunks, Cosine)"]
-        Index -.-> Retriever
-        Retriever --> Context["Ngữ cảnh trích xuất"]
-        Context & History --> Prompt["Academic ChatPromptTemplate"]
-        Prompt --> LLM{"Multi-Model Fallback\n(Nemotron 3.5 Super VL ➔ Lightning ➔ Reasoning ➔ XingChen ➔ Flint)"}
-        LLM --> Output["Câu trả lời kèm số trang & Model đã dùng"]
-        Output --> CLI
+    subgraph DualRetrieval ["2. Truy Vấn Lai Hai Tầng (Two-Stage Hybrid Search)"]
+        UserQuery(["❓ Câu hỏi người dùng"]) --> Rewriter["Contextualize Chain (Viết lại theo lịch sử)"]
+        Rewriter --> BM25["BM25 Keyword Retriever\n(Bắt mốc năm, sự kiện)"]
+        Rewriter --> Dense["FAISS Dense Retriever\n(BAAI/bge-m3 Cosine)"]
+        BM25 & Dense --> RRF["Reciprocal Rank Fusion (RRF)\nLấy 12 đoạn ứng viên"]
+        RRF --> Reranker["GPU Cross-Encoder Reranker\n(bge-reranker-v2-m3 trên RTX 4050 fp16)"]
+        Reranker --> TopK["Top 4 Đoạn Trích Tinh Hoa Nhất (Kèm Score %)"]
+    end
+
+    subgraph Generation ["3. Phản Hồi Đa Mô Hình & Trích Dẫn"]
+        TopK --> Prompt["Academic Prompt Template"]
+        Prompt --> FallbackLLM{"OpenRouter Fallback Pool\n(Nemotron ➔ Lightning ➔ Reasoning ➔ XingChen ➔ Flint)"}
+        FallbackLLM --> Stream["Streaming Token Generator"]
+        Stream --> WebUI["Web UI Streamlit (app.py)"]
+        Stream --> TerminalUI["CLI Terminal (chatbot.py)"]
     end
 ```
 
 ---
 
-## 📁 Cấu Trúc Thư Mục
+## 📁 Cấu Trúc Thư Mục Dự Án
 
 ```text
 chatbot_rag/
-├── docs/                     # Thư mục chứa giáo trình PDF (textbook_LSD.pdf)
-├── faiss_index/              # Thư mục cache vector database FAISS (tự sinh)
-├── chat_history.json         # Lịch sử đàm thoại đa lượt (tự sinh)
-├── .env                      # File cấu hình khóa API (được bảo mật, không commit)
+├── docs/                     # Thư mục chứa tài liệu/giáo trình PDF (textbook_LSD.pdf)
+├── faiss_index/              # Cache cơ sở dữ liệu vector FAISS (tự động sinh)
+├── .streamlit/               # Cấu hình giao diện và theme Streamlit
+│   └── config.toml           # Theme Monochrome Minimalist (nền trắng, chữ đen)
+├── chat_history.json         # Lịch sử đàm thoại đa lượt (tự động cập nhật)
+├── .env                      # File chứa khóa OPENROUTER_API_KEY (không commit)
 ├── .env.example              # File mẫu cấu hình biến môi trường
-├── .gitignore                # Danh sách file/thư mục loại trừ khỏi Git
-├── chatbot.py                # Mã nguồn chính điều phối luồng RAG
-├── requirements.txt          # Danh sách thư viện phụ thuộc
-└── README.md                 # Hướng dẫn chi tiết dự án
+├── .gitignore                # Danh sách loại trừ khỏi Git
+├── rag_core.py               # LÕI RAG CHUNG: Hybrid Search, Reranker GPU, Streaming
+├── app.py                    # GIAO DIỆN WEB STREAMLIT: Monochrome UI, 2 Tabs
+├── chatbot.py                # GIAO DIỆN DÒNG LỆNH (CLI): Interactive Terminal
+├── requirements.txt          # Danh sách thư viện phụ thuộc (Python 3.10+)
+└── README.md                 # Tài liệu hướng dẫn toàn diện dự án
 ```
 
 ---
 
-## ⚙️ Yêu Cầu Hệ Thống
+## ⚙️ Yêu Cầu Kỹ Thuật
 
-* **Hệ điều hành:** Linux (Ubuntu 20.04+ khuyên dùng), macOS hoặc Windows 10/11.
-* **Python:** Phiên bản 3.10 trở lên.
+* **Hệ điều hành:** Linux (Ubuntu 20.04/22.04/24.04 khuyên dùng), macOS hoặc Windows 10/11.
+* **Python:** Phiên bản 3.10 hoặc 3.11.
 * **Phần cứng:**
-  * RAM: Tối thiểu 8GB (khuyên dùng 16GB).
-  * GPU: Khuyên dùng GPU NVIDIA (có hỗ trợ CUDA, ví dụ RTX 3050, 4050...) để nạp mô hình `BAAI/bge-m3` nhanh chóng.
-  * *Lưu ý:* Nếu sử dụng CPU, hệ thống vẫn hoạt động bình thường (chỉ cần điều chỉnh cấu hình cài đặt FAISS CPU).
+  * **RAM:** Tối thiểu 8GB (khuyên dùng 16GB).
+  * **GPU (Khuyên dùng):** Card đồ họa NVIDIA hỗ trợ CUDA (ví dụ: RTX 3050, RTX 4050, RTX 3060...) để tăng tốc Embedding `bge-m3` và Reranker `bge-reranker-v2-m3` ở chuẩn `float16`.
+  * **CPU:** Nếu không có GPU rời, hệ thống vẫn tự động fallback chạy trên CPU (chỉ cần đổi sang `faiss-cpu` và chọn `device="cpu"`).
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt
+## 🚀 Hướng Dẫn Cài Đặt Chi Tiết
 
 ### Bước 1: Clone kho lưu trữ
 ```bash
@@ -92,9 +111,9 @@ git clone https://github.com/KhaiPhong25/chatbot_rag.git
 cd chatbot_rag
 ```
 
-### Bước 2: Tạo và kích hoạt môi trường ảo
+### Bước 2: Tạo và kích hoạt môi trường ảo Python
 ```bash
-# Tạo môi trường ảo Python
+# Tạo môi trường ảo
 python3 -m venv .venv
 
 # Kích hoạt trên Linux/macOS:
@@ -104,101 +123,114 @@ source .venv/bin/activate
 # .venv\Scripts\activate
 ```
 
-### Bước 3: Cài đặt các thư viện phụ thuộc
+### Bước 3: Cài đặt thư viện phụ thuộc
 
-Cài đặt các gói cơ bản từ [requirements.txt](file:///home/wqfeng/Projects/chatbot_rag/requirements.txt):
+Nâng cấp `pip` và cài đặt từ `requirements.txt`:
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
 > [!TIP]
-> **Dành cho máy tính KHÔNG có card đồ họa NVIDIA (Chỉ chạy CPU):**
-> Gỡ gói `faiss-gpu` và cài đặt bản cho CPU:
+> **Dành cho thiết bị KHÔNG có card đồ họa NVIDIA (Chỉ sử dụng CPU):**
+> Gỡ gói `faiss-gpu` và cài đặt bản dành cho CPU:
 > ```bash
 > pip uninstall -y faiss-gpu
 > pip install faiss-cpu
 > ```
-> *(Trong file `chatbot.py`, đổi `model_kwargs={"device": "cuda"}` thành `model_kwargs={"device": "cpu"}` nếu không có GPU)*.
 
-### Bước 4: Thiết lập biến môi trường (API Key)
+### Bước 4: Thiết lập API Key OpenRouter
 
 1. Đăng ký tài khoản tại [OpenRouter.ai](https://openrouter.ai/).
-2. Nhận API Key tại mục [OpenRouter API Keys](https://openrouter.ai/keys) (hoàn toàn miễn phí).
+2. Tạo khóa API hoàn toàn miễn phí tại [OpenRouter API Keys](https://openrouter.ai/keys).
 3. Tạo file `.env` từ file mẫu:
    ```bash
    cp .env.example .env
    ```
-4. Mở file `.env` và cập nhật khóa:
+4. Điền API Key của bạn vào `.env`:
    ```env
    OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    ```
 
 ---
 
-## 💻 Hướng Dẫn Sử Dụng
+## 💻 Hướng Dẫn Khởi Chạy
 
-### 1. Chuẩn bị tài liệu
-Đặt file giáo trình hoặc tài liệu tham khảo định dạng `.pdf` vào thư mục `docs/` (mặc định đã có sẵn file `docs/textbook_LSD.pdf`).
+Dự án hỗ trợ 2 phương thức vận hành tùy theo nhu cầu:
 
-### 2. Khởi chạy Chatbot
+### Cách 1: Khởi chạy Giao Diện Web Streamlit (Khuyên dùng)
+```bash
+streamlit run app.py
+```
+* Trình duyệt sẽ tự động mở tại địa chỉ: `http://localhost:8501`.
+* **Trải nghiệm:**
+  * Rê chuột, chọn các thẻ chủ đề gợi ý hoặc nhập câu hỏi vào ô chat phía dưới.
+  * Câu trả lời được stream trực tiếp mượt mà.
+  * Mở hộp Accordion trích dẫn nguồn để xem số trang và đoạn văn bản gốc trong giáo trình.
+  * Chuyển sang Tab `🏛️ Mốc Lịch Sử Đảng` để khám phá trục thời gian các sự kiện bản lề của Đảng Cộng sản Việt Nam.
+
+### Cách 2: Khởi chạy Giao Diện Dòng Lệnh Terminal (CLI)
 ```bash
 python chatbot.py
 ```
-
-* **Lần đầu tiên chạy:** Chương trình tải tài liệu, chia đoạn, nhúng embedding và lưu index vào `faiss_index/` (mất khoảng 10-30 giây tùy cấu hình phần cứng).
-* **Từ lần thứ hai trở đi:** Chương trình tự phát hiện cache và nạp index trực tiếp, sẵn sàng nhận câu hỏi ngay lập tức.
-
-### 3. Các lệnh điều khiển trong phiên làm việc
-* Gõ câu hỏi trực tiếp và nhấn `Enter`.
-* Gõ `clear`, `cls` hoặc `reset`: Xóa toàn bộ lịch sử trong [chat_history.json](file:///home/wqfeng/Projects/chatbot_rag/chat_history.json) và bắt đầu phiên hỏi đáp hoàn toàn mới.
-* Gõ `exit`, `quit` hoặc `q`: Thoát khỏi chương trình một cách an toàn.
+* **Lệnh điều khiển trong Terminal:**
+  * Nhập câu hỏi và nhấn `Enter` để xem phản hồi streaming.
+  * Gõ `clear`, `cls` hoặc `reset`: Xóa lịch sử trò chuyện trong `chat_history.json`.
+  * Gõ `exit`, `quit` hoặc `q`: Thoát khỏi chương trình.
 
 ---
 
-## 💬 Kịch Bản Mẫu & Trí Nhớ Ngữ Cảnh
+## 💬 Kịch Bản Hỏi Đáp Thực Tế
 
 ```text
-============================================================
-🤖 CHATBOT LỊCH SỬ ĐẢNG CỘNG SẢN VIỆT NAM - ĐÃ SẴN SÀNG!
-📁 Lịch sử trò chuyện lưu tại: 'chat_history.json'
-💡 Lệnh: 'exit'/'q' để thoát | 'clear' để xóa lịch sử hội thoại
-============================================================
+======================================================================
+🤖 HỎI ĐÁP LỊCH SỬ ĐẢNG CSVN (HYBRID RETRIEVAL + GPU RERANKER)
+======================================================================
 
-👤 Bạn hỏi: Tổng Bí thư đầu tiên của Đảng Cộng sản Việt Nam là ai?
-⏳ Đang tìm kiếm tài liệu và suy luận câu trả lời...
+👤 Bạn hỏi: Cương lĩnh chính trị đầu tiên của Đảng được thông qua khi nào và gồm những văn kiện nào?
+⏳ Đang kích hoạt Hybrid Search (BM25 + FAISS) & GPU Reranker...
 
-🤖 Trợ lý [via nvidia/nemotron-3.5-super-vl:free]:
-Tổng Bí thư đầu tiên của Đảng ta là đồng chí **Trần Phú**. Đồng chí được bầu giữ cương vị Tổng Bí thư tại Hội nghị Ban Chấp hành Trung ương họp vào tháng 10 năm 1930 tại Hương Cảng (Trung Quốc).
+⚡ Phản hồi [via nvidia/nemotron-3.5-super-vl:free]:
+Cương lĩnh chính trị đầu tiên của Đảng Cộng sản Việt Nam được thông qua tại **Hội nghị thành lập Đảng** diễn ra từ ngày 6/1 đến đầu tháng 2 năm 1930 tại Cửu Long (Hương Cảng, Trung Quốc) dưới sự chủ trì của lãnh tụ Nguyễn Ái Quốc.
 
-(Nguồn: Giáo trình Lịch sử Đảng Cộng sản Việt Nam, Trang 35)
-------------------------------------------------------------
+Cương lĩnh bao gồm các văn kiện cốt lõi:
+1. **Chính cương vắn tắt của Đảng**
+2. **Sách lược vắn tắt của Đảng**
+3. **Chương trình tóm tắt của Đảng**
+4. **Điều lệ vắn tắt của Đảng**
 
-👤 Bạn hỏi: Đồng chí ấy quê ở đâu và hy sinh năm nào?
-⏳ Đang tìm kiếm tài liệu và suy luận câu trả lời...
+Văn kiện xác định đường lối chiến lược cách mạng Việt Nam: tiến hành "tư sản dân quyền cách mạng và thổ địa cách mạng để đi tới xã hội cộng sản", đánh đổ đế quốc Pháp và phong kiến tay sai, giành độc lập hoàn toàn cho dân tộc.
 
-🤖 Trợ lý [via nvidia/nemotron-3.5-super-vl:free]:
-- **Quê quán:** Đồng chí Trần Phú sinh ra tại xã An Lộc, huyện Tuy An, tỉnh Phú Yên; quê gốc tại xã Tùng Ảnh, huyện Đức Thọ, tỉnh Hà Tĩnh.
-- **Thời gian hy sinh:** Đồng chí hy sinh ngày 6 tháng 9 năm 1931 tại Nhà thương Chợ Quán (Sài Gòn) ở tuổi 27 với lời nhắn nhủ bất hủ: *"Hãy giữ vững chí khí chiến đấu"*.
+📚 [Nguồn trích dẫn: Trang 28 - 32, textbook_LSD.pdf | Độ khớp: 94%]
+----------------------------------------------------------------------
 
-(Nguồn: Giáo trình Lịch sử Đảng Cộng sản Việt Nam, Trang 36)
-------------------------------------------------------------
+👤 Bạn hỏi: Ý nghĩa lịch sử của bản cương lĩnh đó là gì?
+⏳ Đang kích hoạt Hybrid Search (BM25 + FAISS) & GPU Reranker...
 
-👤 Bạn hỏi: exit
-👋 Tạm biệt bạn! Chúc bạn học tốt.
+⚡ Phản hồi [via nvidia/nemotron-3.5-super-vl:free]:
+Ý nghĩa lịch sử to lớn của Cương lĩnh chính trị đầu tiên (1930):
+- **Chấm dứt khủng hoảng về đường lối cứu nước:** Đưa cách mạng Việt Nam bước vào con đường giải phóng đúng đắn, gắn độc lập dân tộc với chủ nghĩa xã hội.
+- **Xác định đúng đắn động lực cách mạng:** Khẳng định giai cấp công nhân lãnh đạo thông qua đội tiên phong là Đảng, khối liên minh công nông là lực lượng nòng cốt.
+- **Kim chỉ nam hành động:** Đặt nền tảng tư tưởng và tổ chức vững chắc cho mọi thắng lợi vẻ vang của cách mạng Việt Nam sau này.
+
+📚 [Nguồn trích dẫn: Trang 33 - 35, textbook_LSD.pdf | Độ khớp: 91%]
+----------------------------------------------------------------------
 ```
 
 ---
 
-## 🛠️ Tùy Chỉnh & Mở Rộng
+## 🛠️ Tùy Chỉnh Nâng Cao
 
-* **Thay đổi kích thước phân đoạn:** Điều chỉnh tham số `breakpoint_threshold_type` và `breakpoint_threshold_amount` tại hàm `SemanticChunker` trong [chatbot.py](file:///home/wqfeng/Projects/chatbot_rag/chatbot.py#L94-L100).
-* **Số lượng đoạn văn bản lấy lại (Top-K):** Điều chỉnh tham số `k` tại `retriever = vectorstore.as_retriever(search_kwargs={"k": 5})` trong [chatbot.py](file:///home/wqfeng/Projects/chatbot_rag/chatbot.py#L138-L141).
-* **Thêm mô hình LLM:** Cập nhật danh sách `FREE_MODELS` trong [chatbot.py](file:///home/wqfeng/Projects/chatbot_rag/chatbot.py#L41-L47) với các model có sẵn trên OpenRouter.
+Bạn có thể dễ dàng điều chỉnh cấu hình sâu trong file [rag_core.py](file:///home/wqfeng/Projects/chatbot_rag/rag_core.py):
+
+* **Tùy chỉnh số lượng đoạn trích sau Rerank:** Thay đổi tham số `top_k_rerank` (mặc định là `4`) trong hàm `stream_with_fallback(...)`.
+* **Tùy chỉnh số ứng viên Candidate Retrieval:** Thay đổi tham số `k` (mặc định là `12`) trong hàm `build_hybrid_retriever(vectorstore, k=12)`.
+* **Tùy chỉnh mô hình LLM:** Cập nhật hoặc bổ sung các model miễn phí khác vào danh sách `FREE_MODELS`.
+* **Tùy chỉnh phân đoạn ngữ nghĩa:** Điều chỉnh `breakpoint_threshold_amount` trong `SemanticChunker` (mặc định ngưỡng phân đoạn là `85%`).
 
 ---
 
 ## 📄 Bản Quyền & Miễn Trừ Trách Nhiệm
 
-* Dự án phục vụ mục đích học tập, nghiên cứu và hỗ trợ sinh viên ôn tập môn học Lịch sử Đảng Cộng sản Việt Nam.
-* Toàn bộ nội dung trả lời được tổng hợp tự động từ giáo trình thông qua hệ thống RAG. Vui lòng đối soát lại số trang trích dẫn khi sử dụng cho các bài nghiên cứu hoặc thi cử chính thức.
+* Dự án phục vụ mục đích học tập, nghiên cứu phi lợi nhuận và hỗ trợ học viên ôn luyện học phần Lịch sử Đảng Cộng sản Việt Nam.
+* Toàn bộ phản hồi được tổng hợp tự động từ giáo trình thông qua hệ thống RAG và mô hình ngôn ngữ lớn. Người học vui lòng đối chiếu số trang tham khảo đính kèm trong các bài viết học thuật hoặc kỳ thi chính thức.
