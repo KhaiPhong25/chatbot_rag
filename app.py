@@ -5,7 +5,11 @@
 # =============================================================================
 
 import os
+import importlib
 import streamlit as st
+
+import rag_core
+importlib.reload(rag_core)
 
 from rag_core import (
     get_embedding_model,
