@@ -405,6 +405,7 @@ def stream_with_fallback(
     question: str,
     retriever,
     session_id: str = "default_user",
+    preferred_models: list[str] | None = None,
 ) -> Iterator[tuple[str, str]]:
     """
     Generator: stream từng token câu trả lời.
@@ -413,9 +414,10 @@ def stream_with_fallback(
     Nếu một model báo lỗi trước khi stream bất kỳ token nào
     → tự động chuyển sang model tiếp theo.
     """
+    models_to_try = preferred_models if preferred_models else FREE_MODELS
     last_error = None
 
-    for model_name in FREE_MODELS:
+    for model_name in models_to_try:
         try:
             chain  = build_conversational_chain(model_name, retriever)
             token_count = 0
@@ -436,4 +438,4 @@ def stream_with_fallback(
             print(f"\n   ⚠️  [{model_name}] gặp lỗi khi stream: {str(e)[:80]}... Thử model tiếp theo.")
             continue
 
-    raise Exception(f"Tất cả {len(FREE_MODELS)} model đều không stream được. Lỗi cuối: {last_error}")
+    raise Exception(f"Tất cả {len(models_to_try)} model đều không stream được. Lỗi cuối: {last_error}")
