@@ -31,8 +31,11 @@ faiss-gpu>=1.8.0
 # --- Hybrid Search (Ưu tiên 2) ---
 rank_bm25>=0.2.2
 
-# --- Web UI (Ưu tiên 1) ---
+# --- Web UI & Enhanced Components ---
 streamlit>=1.30.0
+streamlit-shadcn-ui>=1.4.0
+streamlit-extras>=1.6.0
+streamlit-elements>=0.1.0
 
 # --- Environment & Configuration ---
 python-dotenv>=1.0.0

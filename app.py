@@ -7,6 +7,9 @@
 import os
 import importlib
 import streamlit as st
+import streamlit_shadcn_ui as ui
+from streamlit_extras.stylable_container import stylable_container
+from streamlit_elements import elements, mui, html
 
 import rag_core
 importlib.reload(rag_core)
@@ -355,6 +358,37 @@ CUSTOM_CSS = """
         background: #334155 !important;
     }
 
+    /* ──────────────── TABS STYLING (MINIMALIST SEGMENTED) ──────────────── */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px;
+        background-color: #f1f5f9;
+        padding: 5px;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 22px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        padding: 8px 18px;
+        color: #64748b;
+        font-weight: 600;
+        font-size: 0.88rem;
+        border: none !important;
+        background-color: transparent !important;
+        transition: all 0.2s ease;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        color: #0f172a;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    }
+    .stTabs [data-baseweb="tab-border"] {
+        display: none !important;
+    }
+
     /* Scrollbars */
     ::-webkit-scrollbar {
         width: 6px;
@@ -430,7 +464,7 @@ def render_sources_box(sources: list):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. SIDEBAR - CHỌN MÔ HÌNH VỚI TÊN & ƯU ĐIỂM
+# 5. SIDEBAR - CHỌN MÔ HÌNH VỚI TÊN & ƯU ĐIỂM (TÍCH HỢP SHADCN & EXTRAS)
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     # Brand Header
@@ -439,11 +473,21 @@ with st.sidebar:
         '<div class="sidebar-brand-icon">🎓</div>'
         '<div>'
         '<div class="sidebar-brand-title">Lịch Sử Đảng CSVN</div>'
-        '<div class="sidebar-brand-subtitle">Trợ lý học thuật RAG v2.1</div>'
+        '<div class="sidebar-brand-subtitle">Trợ lý học thuật RAG v2.2</div>'
         '</div>'
         '</div>'
     )
     st.markdown(sidebar_brand_html, unsafe_allow_html=True)
+
+    # Metric card bằng shadcn/ui
+    ui.metric_card(
+        label="Kho Ngữ Liệu Chuẩn",
+        value="398 Trang",
+        description="Giáo trình Lịch sử Đảng CSVN",
+        key="side_metric_kb"
+    )
+
+    ui.separator(key="side_sep_1")
 
     st.markdown("### 🤖 Mô hình Phản Hồi")
 
@@ -456,6 +500,15 @@ with st.sidebar:
         "recursive/flint-v1.0:free": "Recursive Flint v1.0 (Ổn định)",
     }
 
+    MODEL_TAGS = {
+        "auto": "⚡ Tự động Fallback",
+        "nvidia/nemotron-3.5-super-vl:free": "Ngữ cảnh 1M",
+        "nvidia/nemotron-3.5-lightning:free": "Tốc độ phản hồi cao",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": "Suy luận logic",
+        "xingchen-agi/xing4.0-29b-a4b:free": "Tổng hợp kiến thức",
+        "recursive/flint-v1.0:free": "Độ ổn định cao",
+    }
+
     selected_model_key = st.selectbox(
         "Chọn mô hình phản hồi:",
         options=list(MODEL_OPTIONS.keys()),
@@ -464,18 +517,45 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
+    # Badges thông số hệ thống bằng shadcn/ui
+    ui.badges(
+        items=[
+            {"text": MODEL_TAGS.get(selected_model_key, "Tối ưu"), "variant": "secondary"},
+            {"text": "GPU: RTX 4050", "variant": "outline"},
+        ],
+        key="side_badges_sys"
+    )
 
-    # Nút xóa lịch sử hội thoại (nền đen, chữ trắng)
-    if st.button("🗑️ Làm mới cuộc hội thoại", use_container_width=True):
-        st.session_state.messages = []
-        if os.path.exists(CHAT_HISTORY_FILE):
-            try:
-                os.remove(CHAT_HISTORY_FILE)
-            except Exception:
-                pass
-        st.session_state.suggested_prompt = None
-        st.rerun()
+    ui.separator(key="side_sep_2")
+
+    # Nút xóa lịch sử hội thoại bọc trong stylable_container của streamlit-extras
+    with stylable_container(
+        key="btn_new_chat",
+        css_styles="""
+            button {
+                background-color: #0f172a !important;
+                color: #ffffff !important;
+                border-radius: 10px !important;
+                border: 1px solid #0f172a !important;
+                font-weight: 600 !important;
+                transition: all 0.2s ease !important;
+            }
+            button:hover {
+                background-color: #1e293b !important;
+                border-color: #1e293b !important;
+                box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15) !important;
+            }
+        """
+    ):
+        if st.button("🗑️ Làm mới cuộc hội thoại", use_container_width=True):
+            st.session_state.messages = []
+            if os.path.exists(CHAT_HISTORY_FILE):
+                try:
+                    os.remove(CHAT_HISTORY_FILE)
+                except Exception:
+                    pass
+            st.session_state.suggested_prompt = None
+            st.rerun()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -497,74 +577,7 @@ st.markdown(banner_html, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7. GIAO DIỆN KHI CHƯA CÓ TIN NHẮN (GỢI Ý CÂU HỎI NHANH - NÚT ĐEN)
-# ─────────────────────────────────────────────────────────────────────────────
-if len(st.session_state.messages) == 0:
-    st.markdown("""
-    <div class="welcome-intro">
-        <h3>💡 Bạn muốn tìm hiểu nội dung nào hôm nay?</h3>
-        <p>Bấm vào một trong các câu hỏi gợi ý bên dưới hoặc tự nhập câu hỏi vào ô chat:</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button(
-            "📜 Cương lĩnh chính trị đầu tiên (1930)",
-            key="suggest_1",
-            use_container_width=True
-        ):
-            st.session_state.suggested_prompt = "Nội dung cốt lõi và ý nghĩa lịch sử của Cương lĩnh chính trị đầu tiên của Đảng (năm 1930) là gì?"
-            st.rerun()
-
-        if st.button(
-            "⚡ Thắng lợi Cách mạng Tháng Tám (1945)",
-            key="suggest_2",
-            use_container_width=True
-        ):
-            st.session_state.suggested_prompt = "Phân tích nguyên nhân thắng lợi và bài học kinh nghiệm của Cách mạng Tháng Tám năm 1945?"
-            st.rerun()
-
-    with col2:
-        if st.button(
-            "🏛️ Đường lối Đổi mới - Đại hội VI (1986)",
-            key="suggest_3",
-            use_container_width=True
-        ):
-            st.session_state.suggested_prompt = "Đại hội đại biểu toàn quốc lần thứ VI (1986) của Đảng đã đề ra đường lối đổi mới như thế nào?"
-            st.rerun()
-
-        if st.button(
-            "🎯 Chiến thắng Điện Biên Phủ (1954)",
-            key="suggest_4",
-            use_container_width=True
-        ):
-            st.session_state.suggested_prompt = "Ý nghĩa lịch sử của chiến thắng Điện Biên Phủ năm 1954 đối với cuộc kháng chiến chống thực dân Pháp?"
-            st.rerun()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 8. HIỂN THỊ LỊCH SỬ TIN NHẮN (KÈM HỘP TRÍCH DẪN SỐ TRANG)
-# ─────────────────────────────────────────────────────────────────────────────
-for msg in st.session_state.messages:
-    avatar_icon = "👤" if msg["role"] == "user" else "🎓"
-    with st.chat_message(msg["role"], avatar=avatar_icon):
-        if msg["role"] == "assistant" and msg.get("model"):
-            clean_model = msg["model"].split("/")[-1].replace(":free", "")
-            st.markdown(
-                f'<div class="chat-model-tag">⚡ Phản hồi bởi {clean_model}</div>',
-                unsafe_allow_html=True
-            )
-        st.markdown(msg["content"])
-
-        # Hiển thị trích dẫn nguồn số trang cho các câu trả lời trong lịch sử
-        if msg["role"] == "assistant" and msg.get("sources"):
-            render_sources_box(msg["sources"])
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 9. XỬ LÝ NHẬP LIỆU & STREAMING PHẢN HỒI (GPU RERANKED)
+# 7. CHAT INPUT & PROMPT RESOLUTION (Root level)
 # ─────────────────────────────────────────────────────────────────────────────
 user_input = st.chat_input("Nhập câu hỏi về sự kiện, nhân vật, cương lĩnh, mốc thời gian...")
 
@@ -575,73 +588,405 @@ elif st.session_state.suggested_prompt:
     active_prompt = st.session_state.suggested_prompt
     st.session_state.suggested_prompt = None
 
-if active_prompt:
-    # 1. Thêm tin nhắn của User
-    st.session_state.messages.append({"role": "user", "content": active_prompt, "model": None, "sources": None})
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(active_prompt)
 
-    # 2. Xác định danh sách model ưu tiên theo lựa chọn người dùng
-    preferred_models = None
-    if selected_model_key != "auto":
-        other_models = [m for m in FREE_MODELS if m != selected_model_key]
-        preferred_models = [selected_model_key] + other_models
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. HỆ THỐNG TABS ĐA NĂNG (CHAT, TIMELINE, ARCHITECTURE)
+# ─────────────────────────────────────────────────────────────────────────────
+tab_chat, tab_timeline, tab_arch = st.tabs([
+    "💬 Hỏi Đáp & Trích Dẫn",
+    "🏛️ Mốc Lịch Sử Đảng (Interactive Timeline)",
+    "📊 Kiến Trúc RAG & Tri Thức"
+])
 
-    # 3. Xử lý phản hồi từ Assistant với streaming
-    with st.chat_message("assistant", avatar="🎓"):
-        model_tag_placeholder = st.empty()
-        response_placeholder  = st.empty()
 
-        full_response = ""
-        resolved_model = None
-        collected_sources = []
+# ═════════════════════════════════════════════════════════════════════════════
+# TAB 1: KHÔNG GIAN HỘI THOẠI & TRÍCH DẪN (CHAT)
+# ═════════════════════════════════════════════════════════════════════════════
+with tab_chat:
+    # Gợi ý câu hỏi khi chưa có tin nhắn (dùng stylable_container của streamlit-extras)
+    if len(st.session_state.messages) == 0 and not active_prompt:
+        st.markdown("""
+        <div class="welcome-intro">
+            <h3>💡 Bạn muốn tìm hiểu nội dung nào hôm nay?</h3>
+            <p>Bấm vào một trong các chủ đề gợi ý bên dưới hoặc tự nhập câu hỏi vào ô chat phía dưới:</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-        try:
-            for token, model_name, source_docs in stream_with_fallback(
-                active_prompt,
-                retriever,
-                session_id=st.session_state.session_id,
-                preferred_models=preferred_models,
-                top_k_rerank=4,
+        col1, col2 = st.columns(2)
+
+        with col1:
+            with stylable_container(
+                key="suggest_box_1",
+                css_styles="""
+                    {
+                        border: 1px solid #e2e8f0;
+                        border-radius: 12px;
+                        padding: 12px 14px;
+                        background: #ffffff;
+                        margin-bottom: 12px;
+                        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+                    }
+                    :hover {
+                        border-color: #0f172a;
+                        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+                        transform: translateY(-2px);
+                    }
+                    button {
+                        border: none !important;
+                        background: transparent !important;
+                        color: #0f172a !important;
+                        text-align: left !important;
+                        font-weight: 700 !important;
+                        padding: 0 !important;
+                        font-size: 0.92rem !important;
+                    }
+                    button:hover {
+                        color: #000000 !important;
+                        background: transparent !important;
+                    }
+                """
             ):
-                if resolved_model is None:
-                    resolved_model = model_name
-                    clean_name = model_name.split("/")[-1].replace(":free", "")
-                    model_tag_placeholder.markdown(
-                        f'<div class="chat-model-tag">⚡ Phản hồi bởi {clean_name} · Streaming</div>',
-                        unsafe_allow_html=True
+                st.markdown("<div style='font-size: 0.78rem; color: #64748b; margin-bottom: 4px;'>Mốc lịch sử 1930 · Trang 27-35</div>", unsafe_allow_html=True)
+                if st.button("📜 Cương lĩnh chính trị đầu tiên (1930)", key="suggest_1", use_container_width=True):
+                    st.session_state.suggested_prompt = "Nội dung cốt lõi và ý nghĩa lịch sử của Cương lĩnh chính trị đầu tiên của Đảng (năm 1930) là gì?"
+                    st.rerun()
+
+            with stylable_container(
+                key="suggest_box_2",
+                css_styles="""
+                    {
+                        border: 1px solid #e2e8f0;
+                        border-radius: 12px;
+                        padding: 12px 14px;
+                        background: #ffffff;
+                        margin-bottom: 12px;
+                        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+                    }
+                    :hover {
+                        border-color: #0f172a;
+                        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+                        transform: translateY(-2px);
+                    }
+                    button {
+                        border: none !important;
+                        background: transparent !important;
+                        color: #0f172a !important;
+                        text-align: left !important;
+                        font-weight: 700 !important;
+                        padding: 0 !important;
+                        font-size: 0.92rem !important;
+                    }
+                    button:hover {
+                        color: #000000 !important;
+                        background: transparent !important;
+                    }
+                """
+            ):
+                st.markdown("<div style='font-size: 0.78rem; color: #64748b; margin-bottom: 4px;'>Mốc lịch sử 1945 · Trang 89-105</div>", unsafe_allow_html=True)
+                if st.button("⚡ Thắng lợi Cách mạng Tháng Tám (1945)", key="suggest_2", use_container_width=True):
+                    st.session_state.suggested_prompt = "Phân tích nguyên nhân thắng lợi và bài học kinh nghiệm của Cách mạng Tháng Tám năm 1945?"
+                    st.rerun()
+
+        with col2:
+            with stylable_container(
+                key="suggest_box_3",
+                css_styles="""
+                    {
+                        border: 1px solid #e2e8f0;
+                        border-radius: 12px;
+                        padding: 12px 14px;
+                        background: #ffffff;
+                        margin-bottom: 12px;
+                        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+                    }
+                    :hover {
+                        border-color: #0f172a;
+                        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+                        transform: translateY(-2px);
+                    }
+                    button {
+                        border: none !important;
+                        background: transparent !important;
+                        color: #0f172a !important;
+                        text-align: left !important;
+                        font-weight: 700 !important;
+                        padding: 0 !important;
+                        font-size: 0.92rem !important;
+                    }
+                    button:hover {
+                        color: #000000 !important;
+                        background: transparent !important;
+                    }
+                """
+            ):
+                st.markdown("<div style='font-size: 0.78rem; color: #64748b; margin-bottom: 4px;'>Mốc lịch sử 1986 · Trang 280-310</div>", unsafe_allow_html=True)
+                if st.button("🏛️ Đường lối Đổi mới - Đại hội VI (1986)", key="suggest_3", use_container_width=True):
+                    st.session_state.suggested_prompt = "Đại hội đại biểu toàn quốc lần thứ VI (1986) của Đảng đã đề ra đường lối đổi mới như thế nào?"
+                    st.rerun()
+
+            with stylable_container(
+                key="suggest_box_4",
+                css_styles="""
+                    {
+                        border: 1px solid #e2e8f0;
+                        border-radius: 12px;
+                        padding: 12px 14px;
+                        background: #ffffff;
+                        margin-bottom: 12px;
+                        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+                    }
+                    :hover {
+                        border-color: #0f172a;
+                        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+                        transform: translateY(-2px);
+                    }
+                    button {
+                        border: none !important;
+                        background: transparent !important;
+                        color: #0f172a !important;
+                        text-align: left !important;
+                        font-weight: 700 !important;
+                        padding: 0 !important;
+                        font-size: 0.92rem !important;
+                    }
+                    button:hover {
+                        color: #000000 !important;
+                        background: transparent !important;
+                    }
+                """
+            ):
+                st.markdown("<div style='font-size: 0.78rem; color: #64748b; margin-bottom: 4px;'>Mốc lịch sử 1954 · Trang 145-162</div>", unsafe_allow_html=True)
+                if st.button("🎯 Chiến thắng Điện Biên Phủ (1954)", key="suggest_4", use_container_width=True):
+                    st.session_state.suggested_prompt = "Ý nghĩa lịch sử của chiến thắng Điện Biên Phủ năm 1954 đối với cuộc kháng chiến chống thực dân Pháp?"
+                    st.rerun()
+
+    # Hiển thị lịch sử trò chuyện
+    for msg in st.session_state.messages:
+        avatar_icon = "👤" if msg["role"] == "user" else "🎓"
+        with st.chat_message(msg["role"], avatar=avatar_icon):
+            if msg["role"] == "assistant" and msg.get("model"):
+                clean_model = msg["model"].split("/")[-1].replace(":free", "")
+                st.markdown(
+                    f'<div class="chat-model-tag">⚡ Phản hồi bởi {clean_model}</div>',
+                    unsafe_allow_html=True
+                )
+            st.markdown(msg["content"])
+
+            if msg["role"] == "assistant" and msg.get("sources"):
+                render_sources_box(msg["sources"])
+
+    # Xử lý khi có câu hỏi mới đang active
+    if active_prompt:
+        st.session_state.messages.append({"role": "user", "content": active_prompt, "model": None, "sources": None})
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(active_prompt)
+
+        preferred_models = None
+        if selected_model_key != "auto":
+            other_models = [m for m in FREE_MODELS if m != selected_model_key]
+            preferred_models = [selected_model_key] + other_models
+
+        with st.chat_message("assistant", avatar="🎓"):
+            model_tag_placeholder = st.empty()
+            response_placeholder  = st.empty()
+
+            full_response = ""
+            resolved_model = None
+            collected_sources = []
+
+            try:
+                for token, model_name, source_docs in stream_with_fallback(
+                    active_prompt,
+                    retriever,
+                    session_id=st.session_state.session_id,
+                    preferred_models=preferred_models,
+                    top_k_rerank=4,
+                ):
+                    if resolved_model is None:
+                        resolved_model = model_name
+                        clean_name = model_name.split("/")[-1].replace(":free", "")
+                        model_tag_placeholder.markdown(
+                            f'<div class="chat-model-tag">⚡ Phản hồi bởi {clean_name} · Streaming</div>',
+                            unsafe_allow_html=True
+                        )
+
+                    if not collected_sources and source_docs:
+                        for doc in source_docs:
+                            score = doc.metadata.get("rerank_score", 0.0)
+                            collected_sources.append({
+                                "page": doc.metadata.get("page", "?"),
+                                "file": os.path.basename(doc.metadata.get("source", "textbook_LSD.pdf")),
+                                "score_pct": int(score * 100),
+                                "snippet": doc.page_content.strip()[:350] + ("..." if len(doc.page_content.strip()) > 350 else ""),
+                            })
+
+                    full_response += token
+                    response_placeholder.markdown(full_response + " ▌")
+
+                response_placeholder.markdown(full_response)
+
+                if collected_sources:
+                    render_sources_box(collected_sources)
+
+            except Exception as e:
+                full_response = f"❌ Không thể nhận phản hồi từ các mô hình: {e}"
+                response_placeholder.error(full_response)
+
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": full_response,
+                "model": resolved_model,
+                "sources": collected_sources,
+            })
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# TAB 2: TRỤC THỜI GIAN LỊCH SỬ ĐẢNG (STREAMLIT-ELEMENTS & MUI)
+# ═════════════════════════════════════════════════════════════════════════════
+with tab_timeline:
+    st.markdown("""
+    <div style="margin-bottom: 16px;">
+        <h3 style="font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0 0 4px 0;">🏛️ Trục Thời Gian Sự Kiện Lịch Sử Cốt Lõi</h3>
+        <p style="font-size: 0.85rem; color: #64748b; margin: 0;">Trích dẫn trực tiếp từ các chương mục trọng tâm của Giáo trình Lịch sử Đảng Cộng sản Việt Nam.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    HISTORICAL_EVENTS = [
+        {
+            "year": "1930",
+            "title": "Hội nghị thành lập Đảng & Cương lĩnh chính trị đầu tiên",
+            "page_ref": "Trang 27 - 35",
+            "summary": "Hội nghị hợp nhất các tổ chức cộng sản do Nguyễn Ái Quốc chủ trì tại Cửu Long (Hương Cảng). Thông qua Chính cương vắn tắt, Sách lược vắn tắt - Cương lĩnh chính trị đầu tiên xác định đúng đắn con đường cứu nước giải phóng dân tộc.",
+            "query": "Trình bày bối cảnh, nội dung và ý nghĩa lịch sử của Hội nghị thành lập Đảng năm 1930?",
+        },
+        {
+            "year": "1945",
+            "title": "Cách mạng Tháng Tám thành công & Tuyên ngôn Độc lập",
+            "page_ref": "Trang 89 - 105",
+            "summary": "Đảng chớp thời cơ ngàn năm có một, lãnh đạo toàn dân tổng khởi nghĩa thắng lợi. Ngày 2/9/1945, Chủ tịch Hồ Chí Minh đọc Tuyên ngôn Độc lập khai sinh nước Việt Nam Dân chủ Cộng hòa.",
+            "query": "Phân tích nguyên nhân thắng lợi và bài học kinh nghiệm của Cách mạng Tháng Tám năm 1945?",
+        },
+        {
+            "year": "1954",
+            "title": "Chiến thắng Điện Biên Phủ lịch sử",
+            "page_ref": "Trang 145 - 162",
+            "summary": "Chiến thắng 'lừng lẫy năm châu, chấn động địa cầu', đập tan hoàn toàn kế hoạch Nava của thực dân Pháp, buộc Pháp phải ký kết Hiệp định Giơnevơ lập lại hòa bình ở Đông Dương.",
+            "query": "Ý nghĩa lịch sử của chiến thắng Điện Biên Phủ 1954 đối với phong trào giải phóng dân tộc?",
+        },
+        {
+            "year": "1975",
+            "title": "Đại thắng Mùa Xuân & Giải phóng hoàn toàn miền Nam",
+            "page_ref": "Trang 210 - 235",
+            "summary": "Chiến dịch Hồ Chí Minh lịch sử toàn thắng lúc 11h30 ngày 30/4/1975, kết thúc thắng lợi 21 năm kháng chiến chống Mỹ cứu nước, non sông thu về một mối, mở ra kỷ nguyên độc lập, thống nhất.",
+            "query": "Phân tích nghệ thuật quân sự và ý nghĩa thời đại của Đại thắng Mùa Xuân 1975?",
+        },
+        {
+            "year": "1986",
+            "title": "Đại hội VI & Bước ngoặt Đường lối Đổi mới đất nước",
+            "page_ref": "Trang 280 - 310",
+            "summary": "Đại hội đại biểu toàn quốc lần thứ VI đề ra đường lối đổi mới toàn diện: Đổi mới tư duy kinh tế, phát triển kinh tế hàng hóa nhiều thành phần, mở cửa chủ động hội nhập quốc tế.",
+            "query": "Nội dung cơ bản và ý nghĩa bước ngoặt của đường lối Đổi mới tại Đại hội VI năm 1986?",
+        },
+    ]
+
+    with elements("history_timeline_view"):
+        with mui.Box(sx={"display": "flex", "flexDirection": "column", "gap": 2, "mb": 2}):
+            for ev in HISTORICAL_EVENTS:
+                with mui.Card(
+                    variant="outlined",
+                    sx={
+                        "borderRadius": "12px",
+                        "borderColor": "#e2e8f0",
+                        "bgcolor": "#ffffff",
+                        "p": 2.5,
+                        "transition": "all 0.2s ease-in-out",
+                        "&:hover": {
+                            "borderColor": "#0f172a",
+                            "boxShadow": "0 4px 14px rgba(15,23,42,0.06)",
+                        },
+                    }
+                ):
+                    with mui.Box(sx={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "mb": 1.2}):
+                        with mui.Box(sx={"display": "flex", "alignItems": "center", "gap": 1.5}):
+                            mui.Chip(
+                                label=ev["year"],
+                                size="small",
+                                sx={"bgcolor": "#0f172a", "color": "#ffffff", "fontWeight": 700, "fontSize": "13px"}
+                            )
+                            mui.Typography(ev["title"], variant="h6", sx={"fontWeight": 700, "fontSize": "16px", "color": "#0f172a"})
+                        mui.Chip(
+                            label=f"📄 {ev['page_ref']}",
+                            size="small",
+                            variant="outlined",
+                            sx={"borderColor": "#cbd5e1", "color": "#475569", "fontWeight": 600, "fontSize": "12px"}
+                        )
+                    mui.Typography(
+                        ev["summary"],
+                        variant="body2",
+                        sx={"color": "#475569", "lineHeight": 1.6, "fontSize": "14px"}
                     )
 
-                # Thu thập thông tin trích dẫn nguồn từ GPU Reranker
-                if not collected_sources and source_docs:
-                    for doc in source_docs:
-                        score = doc.metadata.get("rerank_score", 0.0)
-                        collected_sources.append({
-                            "page": doc.metadata.get("page", "?"),
-                            "file": os.path.basename(doc.metadata.get("source", "textbook_LSD.pdf")),
-                            "score_pct": int(score * 100),
-                            "snippet": doc.page_content.strip()[:350] + ("..." if len(doc.page_content.strip()) > 350 else ""),
-                        })
+    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+    st.caption("💡 Bấm vào mốc bên dưới để gửi câu hỏi trực tiếp cho trợ lý:")
+    tl_cols = st.columns(len(HISTORICAL_EVENTS))
+    for i, ev in enumerate(HISTORICAL_EVENTS):
+        with tl_cols[i]:
+            if st.button(f"🔍 Mốc {ev['year']}", key=f"btn_tl_{ev['year']}", use_container_width=True):
+                st.session_state.suggested_prompt = ev["query"]
+                st.rerun()
 
-                full_response += token
-                # Hiển thị con trỏ typing ▌
-                response_placeholder.markdown(full_response + " ▌")
 
-            # Hoàn tất: bỏ con trỏ typing
-            response_placeholder.markdown(full_response)
+# ═════════════════════════════════════════════════════════════════════════════
+# TAB 3: KIẾN TRÚC RAG & TRI THỨC (STREAMLIT-SHADCN-UI)
+# ═════════════════════════════════════════════════════════════════════════════
+with tab_arch:
+    st.markdown("""
+    <div style="margin-bottom: 16px;">
+        <h3 style="font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0 0 4px 0;">📊 Kiến Trúc RAG Hai Tầng & Chỉ Số Hệ Thống</h3>
+        <p style="font-size: 0.85rem; color: #64748b; margin: 0;">Tổng quan thông số kỹ thuật, quy trình trích xuất và cơ chế bảo đảm tính chính xác học thuật.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-            # Hiển thị Hộp trích dẫn nguồn số trang ngay bên dưới câu trả lời
-            if collected_sources:
-                render_sources_box(collected_sources)
+    c1, c2 = st.columns(2)
+    with c1:
+        ui.metric_card(
+            label="Kho Ngữ Liệu Học Thuật",
+            value="398 Trang PDF",
+            description="Giáo trình Lịch sử Đảng CSVN chuẩn Bộ GD&ĐT",
+            key="arch_m1"
+        )
+        ui.metric_card(
+            label="Truy Vấn Lai (Hybrid Search)",
+            value="BM25 + FAISS Dense",
+            description="BM25 bắt mốc sự kiện/năm + FAISS bắt ngữ nghĩa",
+            key="arch_m2"
+        )
+    with c2:
+        ui.metric_card(
+            label="GPU Cross-Encoder Reranker",
+            value="bge-reranker-v2-m3",
+            description="RTX 4050 · float16 · Lọc ra Top 4 đoạn trích tinh hoa",
+            key="arch_m3"
+        )
+        ui.metric_card(
+            label="Bộ Phản Hồi LLM (Fallback)",
+            value="5 Mô Hình Free",
+            description="OpenRouter API · Tự động chuyển mạch khi gặp nghẽn",
+            key="arch_m4"
+        )
 
-        except Exception as e:
-            full_response = f"❌ Không thể nhận phản hồi từ các mô hình: {e}"
-            response_placeholder.error(full_response)
+    ui.separator(key="arch_sep_1")
 
-        # Lưu vào session state
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": full_response,
-            "model": resolved_model,
-            "sources": collected_sources,
-        })
+    st.markdown("""
+    #### ⚙️ Cơ Chế Xử Lý 2 Giai Đoạn (Two-stage Retrieval Pipeline)
+    1. **Giai đoạn 1 - Quét ứng viên (Candidate Retrieval)**:
+       - Khi người dùng gửi câu hỏi, hệ thống kích hoạt đồng thời **BM25** (quét từ khóa chính xác, tên hội nghị, mốc năm) và **FAISS Vectorstore** (quét vector ngữ nghĩa BGE-M3).
+       - Thuật toán **RRF (Reciprocal Rank Fusion)** tổng hợp và trích xuất **12 đoạn ứng viên** triển vọng nhất.
+    2. **Giai đoạn 2 - Chấm điểm chéo trên GPU (GPU Cross-Attention Reranking)**:
+       - 12 ứng viên được đưa trực tiếp vào card **NVIDIA RTX 4050** chạy mô hình `BAAI/bge-reranker-v2-m3` ở định dạng `float16`.
+       - Reranker so sánh tương quan ngữ nghĩa sâu từng cặp `[Câu hỏi, Đoạn trích]`, chuẩn hóa điểm số bằng hàm sigmoid ($0.0 \to 1.0$).
+       - Chọn ra **Top 4 đoạn trích tinh hoa nhất** gửi vào context của LLM.
+    3. **Giai đoạn 3 - Trích dẫn số trang chính xác (Precise Page Citation)**:
+       - Mỗi câu trả lời đều đi kèm hộp Accordion hiển thị chính xác **Số trang giáo trình**, **Tên file nguồn**, **Độ khớp %** và **Đoạn trích dẫn nguyên văn**.
+    """)
+
