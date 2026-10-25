@@ -139,20 +139,44 @@ pip install -r requirements.txt
 > pip install faiss-cpu
 > ```
 
-### Bước 4: Thiết lập API Key OpenRouter
+### Bước 4: Thiết lập Biến Môi Trường (.env)
 
-1. Đăng ký tài khoản tại [OpenRouter.ai](https://openrouter.ai/).
-2. Tạo khóa API hoàn toàn miễn phí tại [OpenRouter API Keys](https://openrouter.ai/keys).
-3. Tạo file `.env` từ file mẫu:
+1. **Khóa OpenRouter API (Bắt buộc):**
+   * Đăng ký tài khoản tại [OpenRouter.ai](https://openrouter.ai/).
+   * Tạo khóa API miễn phí tại [OpenRouter API Keys](https://openrouter.ai/keys).
+2. **Khóa Hugging Face Token (Khuyên dùng cho Cloud):**
+   * Đăng ký tài khoản tại [huggingface.co](https://huggingface.co/).
+   * Tạo Access Token tại [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) và tích chọn quyền **`Inference: Make calls to the serverless Inference API`**.
+3. **Tạo file `.env` từ file mẫu:**
    ```bash
    cp .env.example .env
    ```
-4. Điền API Key của bạn vào `.env`:
+4. **Cập nhật các khóa vào `.env`:**
    ```env
    OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    ```
 
+> [!NOTE]
+> **Cơ chế Dual-Mode thông minh:**
+> - Khi có `HF_TOKEN` hợp lệ: Hệ thống tự động kích hoạt **Hugging Face Serverless Inference API (Zero RAM Mode)**, không tải weights 2.2GB về máy, cực kỳ tối ưu cho việc deploy lên Streamlit Cloud.
+> - Khi chạy trên máy cá nhân có GPU: Nếu không dùng API, hệ thống tự động nạp mô hình cục bộ và tăng tốc bằng card đồ họa NVIDIA.
+
 ---
+
+## ☁️ Hướng Dẫn Deploy Lên Streamlit Community Cloud (Miễn Phí)
+
+1. Đưa mã nguồn lên GitHub repository cá nhân.
+2. Trong file [requirements.txt](file:///home/wqfeng/Projects/chatbot_rag/requirements.txt), đổi `faiss-gpu>=1.8.0` thành `faiss-cpu>=1.8.0` (vì Streamlit Cloud miễn phí chỉ chạy CPU).
+3. Đăng nhập [share.streamlit.io](https://share.streamlit.io/) và tạo New App:
+   * **Repository:** Chọn repository của bạn.
+   * **Main file path:** `app.py`.
+4. Trong phần **Advanced settings -> Secrets**, thêm các biến môi trường:
+   ```toml
+   OPENROUTER_API_KEY = "sk-or-v1-xxxxxxxxxxxxxxxx"
+   HF_TOKEN = "hf_xxxxxxxxxxxxxxxx"
+   ```
+5. Bấm **Deploy!** Ứng dụng sẽ khởi động trong vòng 1-2 phút với dung lượng RAM dưới 350MB, không lo sập app.
 
 ## 💻 Hướng Dẫn Khởi Chạy
 

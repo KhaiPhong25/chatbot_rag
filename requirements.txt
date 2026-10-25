@@ -16,25 +16,24 @@ openai>=1.50.0
 # --- Document Loading & PDF Processing ---
 pypdf>=5.0.0
 
-# --- Local Embeddings & HuggingFace Models ---
+# --- Local Embeddings & HuggingFace Models / API ---
 torch>=2.2.0
 transformers>=4.40.0
 sentence-transformers>=3.0.0
 accelerate>=0.30.0
+huggingface-hub>=0.20.0
 
 # --- Vector Database ---
-# Dùng faiss-gpu nếu có card đồ họa NVIDIA (khuyên dùng cho RTX 4050):
+# Dùng faiss-gpu nếu chạy máy cá nhân có card NVIDIA (RTX 4050)
 faiss-gpu>=1.8.0
-# Hoặc nếu chạy trên máy không có GPU, đổi thành:
+# Lưu ý: Khi deploy lên Streamlit Community Cloud (chỉ có CPU), đổi thành:
 # faiss-cpu>=1.8.0
 
-# --- Hybrid Search (Ưu tiên 2) ---
+# --- Hybrid Search ---
 rank_bm25>=0.2.2
 
-# --- Web UI & Enhanced Components ---
+# --- Web UI & Interactive Components ---
 streamlit>=1.30.0
-streamlit-shadcn-ui>=1.4.0
-streamlit-extras>=1.6.0
 streamlit-elements>=0.1.0
 
 # --- Environment & Configuration ---

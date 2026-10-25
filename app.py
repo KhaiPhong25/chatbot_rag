@@ -7,17 +7,6 @@
 import os
 import importlib
 import streamlit as st
-
-# Tự động đồng bộ component registry cho Custom Components v2 (Streamlit 1.66+)
-try:
-    from streamlit.components.v2.get_bidi_component_manager import get_bidi_component_manager
-    _cm = get_bidi_component_manager()
-    if _cm.get_component_asset_root("streamlit-shadcn-ui.v2") is None:
-        _cm.discover_and_register_components(start_file_watching=False)
-except Exception:
-    pass
-
-import streamlit_shadcn_ui as ui
 from streamlit_elements import elements, mui, html
 
 import rag_core
@@ -467,9 +456,9 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. KHỞI TẠO HỆ THỐNG RAG (SINGLETON CACHED: BGE-M3 + FAISS + GPU RERANKER)
 # ─────────────────────────────────────────────────────────────────────────────
-@st.cache_resource(show_spinner="🧠 Đang khởi tạo mô hình BAAI/bge-m3 & GPU Reranker...")
+@st.cache_resource(show_spinner="🧠 Đang khởi tạo hệ thống RAG & mô hình Embedding BAAI/bge-m3...")
 def init_rag_system():
-    """Tải embedding model BGE-M3 (GPU), FAISS Vectorstore, Hybrid Retriever và GPU Reranker."""
+    """Tải embedding model BGE-M3 (API/GPU), FAISS Vectorstore, Hybrid Retriever và GPU Reranker."""
     emb = get_embedding_model()
     vs  = build_or_update_vectorstore(emb)
     ret = build_hybrid_retriever(vs, k=12)
@@ -517,46 +506,8 @@ def render_sources_box(sources: list):
             st.markdown(card_html, unsafe_allow_html=True)
 
 
-def render_metric_card(label: str, value: str, description: str, key: str):
-    """Hiển thị Metric Card theo chuẩn shadcn/ui với cơ chế graceful fallback."""
-    try:
-        ui.metric_card(label=label, value=value, description=description, key=key)
-    except Exception:
-        card_html = (
-            f'<div style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; '
-            f'background: #ffffff; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">'
-            f'<div style="font-size: 0.8rem; font-weight: 500; color: #64748b; margin-bottom: 4px;">{label}</div>'
-            f'<div style="font-size: 1.45rem; font-weight: 800; color: #0f172a; margin-bottom: 4px; font-family: \'Plus Jakarta Sans\', sans-serif;">{value}</div>'
-            f'<div style="font-size: 0.78rem; color: #94a3b8;">{description}</div>'
-            f'</div>'
-        )
-        st.markdown(card_html, unsafe_allow_html=True)
-
-
-def render_badges(items: list[dict], key: str):
-    """Hiển thị Badges theo chuẩn shadcn/ui với cơ chế graceful fallback."""
-    try:
-        ui.badges(items=items, key=key)
-    except Exception:
-        badges_html = " ".join([
-            f'<span style="display:inline-block; padding: 3px 10px; border-radius: 9999px; font-size: 0.72rem; font-weight: 600; '
-            f'background: {"#f1f5f9" if x.get("variant")=="secondary" else "#ffffff"}; '
-            f'border: 1px solid #cbd5e1; color: #0f172a; margin-right: 6px; margin-bottom: 6px;">{x.get("text")}</span>'
-            for x in items
-        ])
-        st.markdown(badges_html, unsafe_allow_html=True)
-
-
-def render_separator(key: str):
-    """Hiển thị đường phân cách theo chuẩn shadcn/ui với cơ chế graceful fallback."""
-    try:
-        ui.separator(key=key)
-    except Exception:
-        st.markdown("<hr style='border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;' />", unsafe_allow_html=True)
-
-
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. SIDEBAR - CHỌN MÔ HÌNH VỚI TÊN & ƯU ĐIỂM (TÍCH HỢP SHADCN & EXTRAS)
+# 5. SIDEBAR - CHỌN MÔ HÌNH VỚI TÊN & ƯU ĐIỂM
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     # Brand Header - Logo và chữ căn đối
@@ -590,7 +541,7 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    render_separator(key="side_sep_action")
+    st.divider()
 
     # Nút xóa lịch sử hội thoại chuẩn giao diện đen tối giản
     if st.button("Làm mới cuộc hội thoại", use_container_width=True):
