@@ -9,17 +9,18 @@ Dự án được tối ưu hóa toàn diện bằng việc kết hợp **Embedd
 ## ✨ Tính Năng Nổi Bật
 
 * **🚀 100% Free Tier:** Vận hành hoàn toàn bằng các mô hình LLM mã nguồn mở chất lượng cao thông qua OpenRouter API không tốn phí.
-* **🔄 Tự Động Fallback 5 Mô Hình (Multi-Model Fallback):** Khi gặp lỗi giới hạn quota, nghẽn mạng (502, timeout), hệ thống tự động chuyển tiếp liền mạch theo danh sách:
-  1. `google/gemini-2.0-flash-exp:free` – Tốc độ phản hồi cực nhanh, văn phong tiếng Việt tự nhiên.
-  2. `qwen/qwen-2.5-72b-instruct:free` – Mô hình 72B tham số, lý luận xuất sắc về các chủ đề học thuật.
-  3. `meta-llama/llama-3.3-70b-instruct:free` – Mô hình 70B tham số, tuân thủ prompt nghiêm ngặt.
-  4. `deepseek/deepseek-r1:free` – Khả năng suy luận từng bước (Chain of Thought) chuyên sâu.
-  5. `nvidia/nemotron-3.5-super-vl:free` – Dự phòng từ NVIDIA với khả năng xử lý ngữ cảnh tốt.
+* **🔄 Tự Động Fallback Giữa Các Mô Hình Miễn Phí (Multi-Model Fallback):** Hệ thống ưu tiên cao nhất mô hình xuất sắc của NVIDIA và tự động chuyển đổi thông minh giữa các mô hình miễn phí đang hoạt động ổn định trên OpenRouter:
+  1. `nvidia/nemotron-3.5-super-vl:free` – **(Ưu tiên số 1)** Siêu mô hình từ NVIDIA, cửa sổ ngữ cảnh cực lớn 1.000.000 tokens, khả năng đọc hiểu ngữ cảnh học thuật và trả lời tiếng Việt xuất sắc.
+  2. `nvidia/nemotron-3.5-lightning:free` – **(Fallback 1)** Tốc độ xử lý siêu tốc, độ trễ cực thấp.
+  3. `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` – **(Fallback 2)** Mô hình 30B chuyên sâu về suy luận logic (Reasoning).
+  4. `xingchen-agi/xing4.0-29b-a4b:free` – **(Fallback 3)** Mô hình 29B tối ưu năng lực đa ngôn ngữ.
+  5. `recursive/flint-v1.0:free` – **(Fallback 4)** Lớp dự phòng ổn định với context dài 262k tokens.
 * **🧠 Trí Nhớ Ngữ Cảnh Đa Lượt (Multi-turn Memory):**
   * Tự động nhận diện đại từ thay thế (*"ông ấy", "sự kiện đó", "khi nào"*) và viết lại câu hỏi thành truy vấn độc lập trước khi tìm kiếm vector.
   * Tích hợp `FileChatMessageHistory` lưu lịch sử trò chuyện bền vững vào file `chat_history.json`.
   * Hỗ trợ lệnh `clear` để làm mới ngữ cảnh trò chuyện bất cứ lúc nào.
-* **⚡ Tối Ưu Tốc Độ Với FAISS Cache:** Chỉ đọc tài liệu PDF và tính toán Embedding một lần duy nhất lúc khởi tạo. Các lần chạy tiếp theo nạp trực tiếp chỉ mục từ thư mục `faiss_index/` trong chưa đầy 2 giây.
+* **✂️ Phân Đoạn Theo Ngữ Nghĩa (Semantic Chunking):** Ứng dụng `SemanticChunker` thay thế cho việc cắt cứng theo số ký tự. Hệ thống tự động đo lường khoảng cách vector giữa các câu kế tiếp và tách đoạn khi có sự biến chuyển chủ đề (ngưỡng percentile 85%), giúp bảo toàn trọn vẹn ngữ cảnh của từng sự kiện lịch sử.
+* **⚡ Tối Ưu Tốc Độ Với FAISS Cache:** Chỉ đọc tài liệu PDF và tính toán Semantic Embedding một lần duy nhất lúc khởi tạo. Các lần chạy tiếp theo nạp trực tiếp chỉ mục từ thư mục `faiss_index/` trong chưa đầy 2 giây mà không cần xử lý lại văn bản.
 * **🎯 Embedding Tiếng Việt Đỉnh Cao:** Sử dụng mô hình `BAAI/bge-m3` tối ưu đa ngôn ngữ, tăng tốc phần cứng bằng GPU NVIDIA (CUDA) với khoảng cách Cosine Similarity.
 * **📖 Trích Dẫn Nguồn Minh Bạch & Chống Ảo Giác:**
   * Prompt thiết kế theo chuẩn học thuật sư phạm, chỉ trả lời dựa trên ngữ cảnh giáo trình được cung cấp.
@@ -31,11 +32,11 @@ Dự án được tối ưu hóa toàn diện bằng việc kết hợp **Embedd
 
 ```mermaid
 flowchart TD
-    subgraph Ingestion ["1. Quy trình nạp & xử lý dữ liệu (Chỉ chạy lần đầu)"]
+    subgraph Ingestion ["1. Quy trình nạp & xử lý dữ liệu (Chỉ chạy khi chưa có FAISS cache)"]
         PDF["docs/*.pdf (Giáo trình PDF)"] --> Loader["PyPDFLoader / DirectoryLoader"]
-        Loader --> Splitter["RecursiveCharacterTextSplitter\n(chunk_size=1200, overlap=200)"]
-        Splitter --> Embed["HuggingFace Embedding (BAAI/bge-m3 via GPU/CPU)"]
-        Embed --> Index[("FAISS Vector Index (faiss_index/)")]
+        EmbedInit["HuggingFace Embedding\n(BAAI/bge-m3 via GPU/CPU)"]
+        Loader & EmbedInit --> Splitter["SemanticChunker\n(Ngắt đoạn theo ngữ nghĩa percentile=85)"]
+        Splitter --> Index[("FAISS Vector Index (faiss_index/)")]
     end
 
     subgraph Chatbot ["2. Luồng hỏi đáp đàm thoại RAG"]
@@ -47,7 +48,7 @@ flowchart TD
         Index -.-> Retriever
         Retriever --> Context["Ngữ cảnh trích xuất"]
         Context & History --> Prompt["Academic ChatPromptTemplate"]
-        Prompt --> LLM{"Multi-Model Fallback\n(Gemini 2.0 ➔ Qwen 2.5 ➔ Llama 3.3 ➔ DeepSeek R1 ➔ Nemotron)"}
+        Prompt --> LLM{"Multi-Model Fallback\n(Nemotron 3.5 Super VL ➔ Lightning ➔ Reasoning ➔ XingChen ➔ Flint)"}
         LLM --> Output["Câu trả lời kèm số trang & Model đã dùng"]
         Output --> CLI
     end
@@ -167,7 +168,7 @@ python chatbot.py
 👤 Bạn hỏi: Tổng Bí thư đầu tiên của Đảng Cộng sản Việt Nam là ai?
 ⏳ Đang tìm kiếm tài liệu và suy luận câu trả lời...
 
-🤖 Trợ lý [via google/gemini-2.0-flash-exp:free]:
+🤖 Trợ lý [via nvidia/nemotron-3.5-super-vl:free]:
 Tổng Bí thư đầu tiên của Đảng ta là đồng chí **Trần Phú**. Đồng chí được bầu giữ cương vị Tổng Bí thư tại Hội nghị Ban Chấp hành Trung ương họp vào tháng 10 năm 1930 tại Hương Cảng (Trung Quốc).
 
 (Nguồn: Giáo trình Lịch sử Đảng Cộng sản Việt Nam, Trang 35)
@@ -176,7 +177,7 @@ Tổng Bí thư đầu tiên của Đảng ta là đồng chí **Trần Phú**. 
 👤 Bạn hỏi: Đồng chí ấy quê ở đâu và hy sinh năm nào?
 ⏳ Đang tìm kiếm tài liệu và suy luận câu trả lời...
 
-🤖 Trợ lý [via google/gemini-2.0-flash-exp:free]:
+🤖 Trợ lý [via nvidia/nemotron-3.5-super-vl:free]:
 - **Quê quán:** Đồng chí Trần Phú sinh ra tại xã An Lộc, huyện Tuy An, tỉnh Phú Yên; quê gốc tại xã Tùng Ảnh, huyện Đức Thọ, tỉnh Hà Tĩnh.
 - **Thời gian hy sinh:** Đồng chí hy sinh ngày 6 tháng 9 năm 1931 tại Nhà thương Chợ Quán (Sài Gòn) ở tuổi 27 với lời nhắn nhủ bất hủ: *"Hãy giữ vững chí khí chiến đấu"*.
 
@@ -191,7 +192,7 @@ Tổng Bí thư đầu tiên của Đảng ta là đồng chí **Trần Phú**. 
 
 ## 🛠️ Tùy Chỉnh & Mở Rộng
 
-* **Thay đổi kích thước phân đoạn:** Điều chỉnh `chunk_size` và `chunk_overlap` tại hàm `RecursiveCharacterTextSplitter` trong [chatbot.py](file:///home/wqfeng/Projects/chatbot_rag/chatbot.py#L94-L100).
+* **Thay đổi kích thước phân đoạn:** Điều chỉnh tham số `breakpoint_threshold_type` và `breakpoint_threshold_amount` tại hàm `SemanticChunker` trong [chatbot.py](file:///home/wqfeng/Projects/chatbot_rag/chatbot.py#L94-L100).
 * **Số lượng đoạn văn bản lấy lại (Top-K):** Điều chỉnh tham số `k` tại `retriever = vectorstore.as_retriever(search_kwargs={"k": 5})` trong [chatbot.py](file:///home/wqfeng/Projects/chatbot_rag/chatbot.py#L138-L141).
 * **Thêm mô hình LLM:** Cập nhật danh sách `FREE_MODELS` trong [chatbot.py](file:///home/wqfeng/Projects/chatbot_rag/chatbot.py#L41-L47) với các model có sẵn trên OpenRouter.
 
